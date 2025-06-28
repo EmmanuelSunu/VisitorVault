@@ -157,19 +157,39 @@ export default function PhotoCaptureModal({ isOpen, onClose, onCapture }: PhotoC
       console.log('Camera already working, reattaching stream to video element');
       if (videoRef.current) {
         const video = videoRef.current;
+        
+        // Temporarily set streaming to false while reattaching
+        setIsStreaming(false);
+        
         video.srcObject = stream;
         
-        // Wait for video to be ready before considering it streaming
+        // Wait for video to be fully ready before enabling capture
         const handleVideoReady = () => {
           console.log('Video reattached and ready for retake, ready state:', video.readyState);
-          setIsStreaming(true);
+          console.log('Video dimensions after reattach:', video.videoWidth, 'x', video.videoHeight);
+          
+          // Only set streaming to true if video has proper dimensions and data
+          if (video.readyState >= video.HAVE_CURRENT_DATA && video.videoWidth > 0 && video.videoHeight > 0) {
+            setIsStreaming(true);
+          } else {
+            console.log('Video not fully ready yet, waiting...');
+            // Try again after a short delay
+            setTimeout(() => {
+              if (video.readyState >= video.HAVE_CURRENT_DATA && video.videoWidth > 0) {
+                setIsStreaming(true);
+              }
+            }, 500);
+          }
         };
         
         video.addEventListener('loadedmetadata', handleVideoReady, { once: true });
         video.addEventListener('canplay', handleVideoReady, { once: true });
+        video.addEventListener('loadeddata', handleVideoReady, { once: true });
         
         // Make sure video is playing
-        video.play().catch((err) => {
+        video.play().then(() => {
+          console.log('Video playing after reattach');
+        }).catch((err) => {
           console.error('Error playing video on retake:', err);
         });
       }
