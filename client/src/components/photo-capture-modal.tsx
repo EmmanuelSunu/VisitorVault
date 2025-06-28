@@ -16,7 +16,36 @@ export default function PhotoCaptureModal({ isOpen, onClose, onCapture }: PhotoC
   const [isStreaming, setIsStreaming] = useState(false);
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const timeoutRefs = useRef<{ force?: NodeJS.Timeout; error?: NodeJS.Timeout }>({});
+  const [countdown, setCountdown] = useState<number>(0);
+  const timeoutRefs = useRef<{ force?: NodeJS.Timeout; error?: NodeJS.Timeout; countdown?: NodeJS.Timeout }>({});
+
+  // Start countdown timer (30 seconds)
+  const startCountdownTimer = useCallback(() => {
+    if (timeoutRefs.current.countdown) {
+      clearInterval(timeoutRefs.current.countdown);
+    }
+    
+    setCountdown(30);
+    timeoutRefs.current.countdown = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timeoutRefs.current.countdown!);
+          setError('Time expired. Please try again.');
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, []);
+
+  // Stop countdown timer
+  const stopCountdownTimer = useCallback(() => {
+    if (timeoutRefs.current.countdown) {
+      clearInterval(timeoutRefs.current.countdown);
+      timeoutRefs.current.countdown = undefined;
+    }
+    setCountdown(0);
+  }, []);
 
   const startCamera = useCallback(async () => {
     try {
@@ -84,9 +113,11 @@ export default function PhotoCaptureModal({ isOpen, onClose, onCapture }: PhotoC
           if (video.videoWidth > 0 && video.videoHeight > 0) {
             console.log('Video has dimensions, forcing streaming state');
             setIsStreaming(true);
+            startCountdownTimer();
           } else if (stream && stream.active) {
             console.log('Stream is active, forcing streaming state anyway');
             setIsStreaming(true);
+            startCountdownTimer();
           }
         }, 1000);
         
@@ -125,6 +156,7 @@ export default function PhotoCaptureModal({ isOpen, onClose, onCapture }: PhotoC
       try {
         const photoData = capturePhoto(videoRef.current);
         setCapturedPhoto(photoData);
+        stopCountdownTimer();
         console.log('Photo captured successfully');
       } catch (err) {
         setError('Failed to capture photo. Please try again.');
@@ -137,11 +169,12 @@ export default function PhotoCaptureModal({ isOpen, onClose, onCapture }: PhotoC
   }, [isStreaming]);
 
   const handleRetake = useCallback(() => {
-    console.log('Retaking photo - current state:', { isStreaming, hasStream: !!stream });
+    console.log('Retaking photo - resetting to camera mode');
     setCapturedPhoto(null);
     setError(null);
+    stopCountdownTimer();
     
-    // Clear any existing timeouts to prevent error messages
+    // Clear any existing timeouts
     if (timeoutRefs.current.force) {
       clearTimeout(timeoutRefs.current.force);
       timeoutRefs.current.force = undefined;
@@ -151,71 +184,20 @@ export default function PhotoCaptureModal({ isOpen, onClose, onCapture }: PhotoC
       timeoutRefs.current.error = undefined;
     }
     
-    // If both stream and isStreaming are true, camera should already be working
-    // But we need to ensure the video element has the stream attached
-    if (stream && isStreaming) {
-      console.log('Camera already working, reattaching stream to video element');
-      if (videoRef.current) {
-        const video = videoRef.current;
-        
-        // Temporarily set streaming to false while reattaching
-        setIsStreaming(false);
-        
-        video.srcObject = stream;
-        
-        // Wait for video to be fully ready before enabling capture
-        const handleVideoReady = () => {
-          console.log('Video reattached and ready for retake, ready state:', video.readyState);
-          console.log('Video dimensions after reattach:', video.videoWidth, 'x', video.videoHeight);
-          
-          // Only set streaming to true if video has proper dimensions and data
-          if (video.readyState >= video.HAVE_CURRENT_DATA && video.videoWidth > 0 && video.videoHeight > 0) {
-            setIsStreaming(true);
-          } else {
-            console.log('Video not fully ready yet, waiting...');
-            // Try again after a short delay
-            setTimeout(() => {
-              if (video.readyState >= video.HAVE_CURRENT_DATA && video.videoWidth > 0) {
-                setIsStreaming(true);
-              }
-            }, 500);
-          }
-        };
-        
-        video.addEventListener('loadedmetadata', handleVideoReady, { once: true });
-        video.addEventListener('canplay', handleVideoReady, { once: true });
-        video.addEventListener('loadeddata', handleVideoReady, { once: true });
-        
-        // Make sure video is playing
-        video.play().then(() => {
-          console.log('Video playing after reattach');
-        }).catch((err) => {
-          console.error('Error playing video on retake:', err);
-        });
-      }
-      return;
+    // Simply restart the camera fresh - this is more reliable than trying to reuse stream
+    if (stream) {
+      console.log('Stopping existing stream for fresh restart');
+      stopCamera(stream);
+      setStream(null);
+      setIsStreaming(false);
     }
     
-    // If we have a stream but not streaming, try to restart the video
-    if (stream && !isStreaming) {
-      console.log('Stream exists but not streaming, attempting to restart video...');
-      if (videoRef.current) {
-        const video = videoRef.current;
-        video.srcObject = stream;
-        video.play().then(() => {
-          console.log('Video restarted successfully');
-          setIsStreaming(true);
-        }).catch((err) => {
-          console.error('Error restarting video:', err);
-          // If restart fails, start fresh camera
-          startCamera();
-        });
-      }
-    } else if (!stream) {
-      console.log('No stream, starting fresh camera...');
+    // Start camera fresh
+    setTimeout(() => {
+      console.log('Starting fresh camera for retake');
       startCamera();
-    }
-  }, [isStreaming, stream, startCamera]);
+    }, 100);
+  }, [stream, startCamera, stopCountdownTimer]);
 
   const handleUsePhoto = useCallback(() => {
     if (capturedPhoto) {
@@ -232,8 +214,9 @@ export default function PhotoCaptureModal({ isOpen, onClose, onCapture }: PhotoC
     setIsStreaming(false);
     setCapturedPhoto(null);
     setError(null);
+    stopCountdownTimer();
     onClose();
-  }, [stream, onClose]);
+  }, [stream, onClose, stopCountdownTimer]);
 
   // Start camera when modal opens
   useEffect(() => {
@@ -281,10 +264,19 @@ export default function PhotoCaptureModal({ isOpen, onClose, onCapture }: PhotoC
                   playsInline
                   style={{ display: 'block' }}
                 />
-                {/* Overlay guide - only show when streaming */}
+                {/* Overlay guide and countdown - only show when streaming */}
                 {isStreaming && (
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                     <div className="w-64 h-64 border-2 border-white rounded-full opacity-50"></div>
+                    {/* Countdown timer */}
+                    {countdown > 0 && (
+                      <div className="absolute top-4 right-4 bg-black bg-opacity-75 text-white px-3 py-2 rounded-lg">
+                        <div className="text-center">
+                          <div className="text-lg font-bold">{countdown}</div>
+                          <div className="text-xs">seconds</div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
                 {/* Loading overlay - only show when not streaming */}
