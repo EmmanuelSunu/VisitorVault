@@ -126,6 +126,8 @@ A modern full-stack visitor management system built with React, Express, and Pos
 ## Changelog
 
 - June 28, 2025. Initial setup
+- June 28, 2025. Fixed camera initialization and created visitor-focused wizard form
+- June 28, 2025. Resolved camera display issues with video element rendering
 
 ## User Preferences
 

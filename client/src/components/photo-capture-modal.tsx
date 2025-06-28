@@ -85,13 +85,13 @@ export default function PhotoCaptureModal({ isOpen, onClose, onCapture }: PhotoC
           }
         }, 1000);
         
-        // Set a longer timeout for errors
+        // Set a longer timeout for errors (only if stream isn't working)
         const errorTimeout = setTimeout(() => {
-          if (!isStreaming) {
+          if (!isStreaming && (!stream || !stream.active)) {
             console.error('Camera initialization timeout');
             setError('Camera initialization took too long. Please try again.');
           }
-        }, 8000);
+        }, 10000);
         
         // Cleanup function
         return () => {
