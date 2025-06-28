@@ -28,50 +28,62 @@ export default function PhotoCaptureModal({ isOpen, onClose, onCapture }: PhotoC
       setStream(mediaStream);
       
       if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream;
-        
-        // Add multiple event listeners to ensure we catch when video is ready
         const video = videoRef.current;
+        video.srcObject = mediaStream;
         
-        const handleCanPlay = () => {
-          console.log('Video can play');
-          video.play().then(() => {
-            console.log('Video started playing');
+        console.log('Setting video srcObject and attempting to play...');
+        
+        // Simple approach: set autoplay and directly try to play
+        video.autoplay = true;
+        video.muted = true;
+        video.playsInline = true;
+        
+        // Use a more direct approach
+        const playVideo = async () => {
+          try {
+            await video.play();
+            console.log('Video playing successfully');
             setIsStreaming(true);
-          }).catch((err) => {
+          } catch (err) {
             console.error('Error playing video:', err);
             setError('Failed to start video stream.');
-          });
+          }
         };
 
+        // Try to play immediately
+        playVideo();
+        
+        // Also listen for the loadedmetadata event as backup
         const handleLoadedMetadata = () => {
-          console.log('Video metadata loaded');
-          if (video.readyState >= 2) { // HAVE_CURRENT_DATA
-            handleCanPlay();
+          console.log('Video metadata loaded, video ready state:', video.readyState);
+          if (!isStreaming) {
+            playVideo();
           }
         };
 
         video.addEventListener('loadedmetadata', handleLoadedMetadata);
-        video.addEventListener('canplay', handleCanPlay);
         
-        // Fallback: try to play immediately if video is already ready
-        if (video.readyState >= 2) {
-          handleCanPlay();
-        }
+        // Set a shorter timeout to force streaming state if video seems to be working
+        const forceStreamingTimeout = setTimeout(() => {
+          if (video.videoWidth > 0 && video.videoHeight > 0 && !isStreaming) {
+            console.log('Video has dimensions, forcing streaming state');
+            setIsStreaming(true);
+          }
+        }, 2000);
         
-        // Set a timeout to show error if video doesn't start in 10 seconds
-        const timeout = setTimeout(() => {
+        // Set a longer timeout for errors
+        const errorTimeout = setTimeout(() => {
           if (!isStreaming) {
             console.error('Camera initialization timeout');
             setError('Camera initialization took too long. Please try again.');
           }
-        }, 10000);
+        }, 8000);
         
         // Cleanup function
         return () => {
-          clearTimeout(timeout);
+          clearTimeout(forceStreamingTimeout);
+          clearTimeout(errorTimeout);
           video.removeEventListener('loadedmetadata', handleLoadedMetadata);
-          video.removeEventListener('canplay', handleCanPlay);
         };
       }
     } catch (err) {
