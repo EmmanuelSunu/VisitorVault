@@ -56,20 +56,34 @@ export default function PhotoCaptureModal({ isOpen, onClose, onCapture }: PhotoC
         // Also listen for the loadedmetadata event as backup
         const handleLoadedMetadata = () => {
           console.log('Video metadata loaded, video ready state:', video.readyState);
+          console.log('Video dimensions:', video.videoWidth, 'x', video.videoHeight);
           if (!isStreaming) {
             playVideo();
           }
         };
 
+        // Listen for playing event
+        const handlePlaying = () => {
+          console.log('Video playing event fired');
+          setIsStreaming(true);
+        };
+
         video.addEventListener('loadedmetadata', handleLoadedMetadata);
+        video.addEventListener('playing', handlePlaying);
         
-        // Set a shorter timeout to force streaming state if video seems to be working
+        // Set a very short timeout to force streaming state
         const forceStreamingTimeout = setTimeout(() => {
-          if (video.videoWidth > 0 && video.videoHeight > 0 && !isStreaming) {
+          console.log('Force timeout - current streaming state:', isStreaming);
+          console.log('Video dimensions:', video.videoWidth, 'x', video.videoHeight);
+          console.log('Video ready state:', video.readyState);
+          if (video.videoWidth > 0 && video.videoHeight > 0) {
             console.log('Video has dimensions, forcing streaming state');
             setIsStreaming(true);
+          } else if (stream && stream.active) {
+            console.log('Stream is active, forcing streaming state anyway');
+            setIsStreaming(true);
           }
-        }, 2000);
+        }, 1000);
         
         // Set a longer timeout for errors
         const errorTimeout = setTimeout(() => {
@@ -84,6 +98,7 @@ export default function PhotoCaptureModal({ isOpen, onClose, onCapture }: PhotoC
           clearTimeout(forceStreamingTimeout);
           clearTimeout(errorTimeout);
           video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+          video.removeEventListener('playing', handlePlaying);
         };
       }
     } catch (err) {
@@ -165,24 +180,31 @@ export default function PhotoCaptureModal({ isOpen, onClose, onCapture }: PhotoC
               </div>
             ) : (
               <div className="bg-gray-900 rounded-lg aspect-video flex items-center justify-center relative overflow-hidden">
-                {isStreaming ? (
-                  <>
-                    <video
-                      ref={videoRef}
-                      className="w-full h-full object-cover"
-                      autoPlay
-                      muted
-                      playsInline
-                    />
-                    {/* Overlay guide */}
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <div className="w-64 h-64 border-2 border-white rounded-full opacity-50"></div>
+                <video
+                  ref={videoRef}
+                  className="w-full h-full object-cover"
+                  autoPlay
+                  muted
+                  playsInline
+                  style={{ display: 'block' }}
+                />
+                {/* Overlay guide - only show when streaming */}
+                {isStreaming && (
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="w-64 h-64 border-2 border-white rounded-full opacity-50"></div>
+                  </div>
+                )}
+                {/* Loading overlay - only show when not streaming */}
+                {!isStreaming && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-80">
+                    <div className="text-center text-white">
+                      <Camera className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                      <p className="text-lg">Initializing camera...</p>
+                      <p className="text-sm mt-2 opacity-75">
+                        Stream: {stream ? 'Active' : 'None'} | 
+                        Streaming: {isStreaming ? 'Yes' : 'No'}
+                      </p>
                     </div>
-                  </>
-                ) : (
-                  <div className="text-center text-white">
-                    <Camera className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                    <p className="text-lg">Initializing camera...</p>
                   </div>
                 )}
               </div>
