@@ -120,9 +120,31 @@ export default function PhotoCaptureModal({ isOpen, onClose, onCapture }: PhotoC
   }, [isStreaming]);
 
   const handleRetake = useCallback(() => {
+    console.log('Retaking photo - current state:', { isStreaming, hasStream: !!stream });
     setCapturedPhoto(null);
     setError(null);
-  }, []);
+    
+    // If we have a stream but not streaming, try to restart the video
+    if (stream && !isStreaming) {
+      console.log('Stream exists but not streaming, attempting to restart video...');
+      if (videoRef.current) {
+        const video = videoRef.current;
+        video.srcObject = stream;
+        video.play().then(() => {
+          console.log('Video restarted successfully');
+          setIsStreaming(true);
+        }).catch((err) => {
+          console.error('Error restarting video:', err);
+          // If restart fails, start fresh camera
+          startCamera();
+        });
+      }
+    } else if (!stream) {
+      console.log('No stream, starting fresh camera...');
+      startCamera();
+    }
+    // If both stream and isStreaming are true, camera should already be working
+  }, [isStreaming, stream, startCamera]);
 
   const handleUsePhoto = useCallback(() => {
     if (capturedPhoto) {
