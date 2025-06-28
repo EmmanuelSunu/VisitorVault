@@ -21,25 +21,64 @@ export default function PhotoCaptureModal({ isOpen, onClose, onCapture }: PhotoC
     try {
       setError(null);
       setIsStreaming(false);
+      console.log('Starting camera...');
+      
       const mediaStream = await initializeCamera();
+      console.log('Camera stream obtained:', mediaStream);
       setStream(mediaStream);
       
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
-        videoRef.current.onloadedmetadata = () => {
-          videoRef.current?.play().then(() => {
+        
+        // Add multiple event listeners to ensure we catch when video is ready
+        const video = videoRef.current;
+        
+        const handleCanPlay = () => {
+          console.log('Video can play');
+          video.play().then(() => {
+            console.log('Video started playing');
             setIsStreaming(true);
           }).catch((err) => {
             console.error('Error playing video:', err);
             setError('Failed to start video stream.');
           });
         };
+
+        const handleLoadedMetadata = () => {
+          console.log('Video metadata loaded');
+          if (video.readyState >= 2) { // HAVE_CURRENT_DATA
+            handleCanPlay();
+          }
+        };
+
+        video.addEventListener('loadedmetadata', handleLoadedMetadata);
+        video.addEventListener('canplay', handleCanPlay);
+        
+        // Fallback: try to play immediately if video is already ready
+        if (video.readyState >= 2) {
+          handleCanPlay();
+        }
+        
+        // Set a timeout to show error if video doesn't start in 10 seconds
+        const timeout = setTimeout(() => {
+          if (!isStreaming) {
+            console.error('Camera initialization timeout');
+            setError('Camera initialization took too long. Please try again.');
+          }
+        }, 10000);
+        
+        // Cleanup function
+        return () => {
+          clearTimeout(timeout);
+          video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+          video.removeEventListener('canplay', handleCanPlay);
+        };
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to access camera. Please check permissions.');
       console.error('Camera initialization error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to access camera. Please check permissions.');
     }
-  }, []);
+  }, [isStreaming]);
 
   const handleCapture = useCallback(() => {
     if (videoRef.current && isStreaming) {
@@ -78,10 +117,21 @@ export default function PhotoCaptureModal({ isOpen, onClose, onCapture }: PhotoC
 
   // Start camera when modal opens
   useEffect(() => {
-    if (isOpen && !isStreaming && !capturedPhoto) {
+    if (isOpen && !stream && !capturedPhoto) {
+      console.log('Modal opened, starting camera...');
       startCamera();
     }
-  }, [isOpen, isStreaming, capturedPhoto, startCamera]);
+    
+    // Cleanup on close
+    return () => {
+      if (!isOpen && stream) {
+        console.log('Modal closed, stopping camera...');
+        stopCamera(stream);
+        setStream(null);
+        setIsStreaming(false);
+      }
+    };
+  }, [isOpen, stream, capturedPhoto, startCamera]);
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>

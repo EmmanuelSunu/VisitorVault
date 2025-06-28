@@ -18,8 +18,11 @@ export async function initializeCamera(constraints: CameraConstraints = {}): Pro
     throw new Error('Camera not supported by this browser');
   }
 
+  console.log('Requesting camera access with constraints:', { width, height, facingMode });
+
   try {
-    const mediaConstraints: MediaStreamConstraints = {
+    // Try with ideal constraints first
+    let mediaConstraints: MediaStreamConstraints = {
       video: {
         width: { ideal: width },
         height: { ideal: height },
@@ -28,23 +31,42 @@ export async function initializeCamera(constraints: CameraConstraints = {}): Pro
       audio: false
     };
 
-    const stream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+    console.log('Attempting getUserMedia with ideal constraints...');
+    let stream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+    console.log('Camera stream obtained successfully:', stream);
     return stream;
   } catch (error) {
-    console.error('Error accessing camera:', error);
+    console.warn('Failed with ideal constraints, trying basic constraints...', error);
     
-    if (error instanceof Error) {
-      switch (error.name) {
-        case 'NotAllowedError':
-          throw new Error('Camera access denied. Please allow camera permissions and try again.');
-        case 'NotFoundError':
-          throw new Error('No camera found on this device.');
-        case 'NotReadableError':
-          throw new Error('Camera is currently in use by another application.');
-        case 'OverconstrainedError':
-          throw new Error('Camera does not support the requested configuration.');
-        default:
-          throw new Error(`Camera error: ${error.message}`);
+    // Fallback to basic constraints
+    try {
+      const basicConstraints: MediaStreamConstraints = {
+        video: {
+          facingMode: facingMode
+        },
+        audio: false
+      };
+      
+      console.log('Attempting getUserMedia with basic constraints...');
+      const stream = await navigator.mediaDevices.getUserMedia(basicConstraints);
+      console.log('Camera stream obtained with basic constraints:', stream);
+      return stream;
+    } catch (fallbackError) {
+      console.error('Error accessing camera:', fallbackError);
+      
+      if (fallbackError instanceof Error) {
+        switch (fallbackError.name) {
+          case 'NotAllowedError':
+            throw new Error('Camera access denied. Please allow camera permissions and try again.');
+          case 'NotFoundError':
+            throw new Error('No camera found on this device.');
+          case 'NotReadableError':
+            throw new Error('Camera is currently in use by another application.');
+          case 'OverconstrainedError':
+            throw new Error('Camera does not support the requested configuration.');
+          default:
+            throw new Error(`Camera error: ${fallbackError.message}`);
+        }
       }
     }
     
