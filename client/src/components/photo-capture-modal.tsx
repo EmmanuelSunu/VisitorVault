@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Camera, RotateCcw } from "lucide-react";
@@ -70,11 +70,11 @@ export default function PhotoCaptureModal({ isOpen, onClose, onCapture }: PhotoC
   }, [stream, onClose]);
 
   // Start camera when modal opens
-  useState(() => {
+  useEffect(() => {
     if (isOpen && !isStreaming && !capturedPhoto) {
       startCamera();
     }
-  });
+  }, [isOpen, isStreaming, capturedPhoto, startCamera]);
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>

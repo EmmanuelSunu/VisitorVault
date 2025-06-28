@@ -5,6 +5,7 @@ import { z } from "zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,6 +41,18 @@ export default function VisitorRegistration() {
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [registrationResult, setRegistrationResult] = useState<any>(null);
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
+
+  // Navigation handlers
+  const handleCancel = () => {
+    setLocation("/");
+  };
+
+  const handleBack = () => {
+    if (step > 1) {
+      setStep(step - 1);
+    }
+  };
 
   const form = useForm<PersonalInfoData>({
     resolver: zodResolver(personalInfoSchema),
@@ -365,9 +378,9 @@ export default function VisitorRegistration() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {hosts.map((host: any) => (
+                            {(hosts as any[]).map((host: any) => (
                               <SelectItem key={host.id} value={host.id}>
-                                {host.firstName} {host.lastName} - {host.department}
+                                {host.firstName} {host.lastName} - {host.role}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -385,7 +398,7 @@ export default function VisitorRegistration() {
                       <FormItem>
                         <FormLabel>Location</FormLabel>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {locations.map((location: any) => (
+                          {(locations as any[]).map((location: any) => (
                             <div key={location.id} className="relative">
                               <input
                                 type="radio"
@@ -423,7 +436,7 @@ export default function VisitorRegistration() {
 
                   {/* Action Buttons */}
                   <div className="flex justify-end space-x-4 pt-6">
-                    <Button type="button" variant="outline">
+                    <Button type="button" variant="outline" onClick={handleCancel}>
                       Cancel
                     </Button>
                     <Button type="submit">
@@ -488,7 +501,7 @@ export default function VisitorRegistration() {
 
                 {/* Action Buttons */}
                 <div className="flex justify-between pt-6">
-                  <Button variant="outline" onClick={() => setStep(1)}>
+                  <Button variant="outline" onClick={handleBack}>
                     <ArrowLeft className="mr-2 h-4 w-4" />
                     Back
                   </Button>
