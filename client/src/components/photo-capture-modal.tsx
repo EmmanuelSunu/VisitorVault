@@ -16,6 +16,7 @@ export default function PhotoCaptureModal({ isOpen, onClose, onCapture }: PhotoC
   const [isStreaming, setIsStreaming] = useState(false);
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const timeoutRefs = useRef<{ force?: NodeJS.Timeout; error?: NodeJS.Timeout }>({});
 
   const startCamera = useCallback(async () => {
     try {
@@ -71,8 +72,12 @@ export default function PhotoCaptureModal({ isOpen, onClose, onCapture }: PhotoC
         video.addEventListener('loadedmetadata', handleLoadedMetadata);
         video.addEventListener('playing', handlePlaying);
         
+        // Clear any existing timeouts
+        if (timeoutRefs.current.force) clearTimeout(timeoutRefs.current.force);
+        if (timeoutRefs.current.error) clearTimeout(timeoutRefs.current.error);
+        
         // Set a very short timeout to force streaming state
-        const forceStreamingTimeout = setTimeout(() => {
+        timeoutRefs.current.force = setTimeout(() => {
           console.log('Force timeout - current streaming state:', isStreaming);
           console.log('Video dimensions:', video.videoWidth, 'x', video.videoHeight);
           console.log('Video ready state:', video.readyState);
@@ -86,7 +91,7 @@ export default function PhotoCaptureModal({ isOpen, onClose, onCapture }: PhotoC
         }, 1000);
         
         // Set a longer timeout for errors (only if stream isn't working)
-        const errorTimeout = setTimeout(() => {
+        timeoutRefs.current.error = setTimeout(() => {
           if (!isStreaming && (!stream || !stream.active)) {
             console.error('Camera initialization timeout');
             setError('Camera initialization took too long. Please try again.');
@@ -95,8 +100,8 @@ export default function PhotoCaptureModal({ isOpen, onClose, onCapture }: PhotoC
         
         // Cleanup function
         return () => {
-          clearTimeout(forceStreamingTimeout);
-          clearTimeout(errorTimeout);
+          if (timeoutRefs.current.force) clearTimeout(timeoutRefs.current.force);
+          if (timeoutRefs.current.error) clearTimeout(timeoutRefs.current.error);
           video.removeEventListener('loadedmetadata', handleLoadedMetadata);
           video.removeEventListener('playing', handlePlaying);
         };
@@ -124,6 +129,22 @@ export default function PhotoCaptureModal({ isOpen, onClose, onCapture }: PhotoC
     setCapturedPhoto(null);
     setError(null);
     
+    // Clear any existing timeouts to prevent error messages
+    if (timeoutRefs.current.force) {
+      clearTimeout(timeoutRefs.current.force);
+      timeoutRefs.current.force = undefined;
+    }
+    if (timeoutRefs.current.error) {
+      clearTimeout(timeoutRefs.current.error);
+      timeoutRefs.current.error = undefined;
+    }
+    
+    // If both stream and isStreaming are true, camera should already be working
+    if (stream && isStreaming) {
+      console.log('Camera already working, nothing to restart');
+      return;
+    }
+    
     // If we have a stream but not streaming, try to restart the video
     if (stream && !isStreaming) {
       console.log('Stream exists but not streaming, attempting to restart video...');
@@ -143,7 +164,6 @@ export default function PhotoCaptureModal({ isOpen, onClose, onCapture }: PhotoC
       console.log('No stream, starting fresh camera...');
       startCamera();
     }
-    // If both stream and isStreaming are true, camera should already be working
   }, [isStreaming, stream, startCamera]);
 
   const handleUsePhoto = useCallback(() => {
