@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
@@ -13,39 +13,50 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Progress } from "@/components/ui/progress";
-import { ArrowRight, ArrowLeft, Camera, Download, Printer, RotateCcw } from "lucide-react";
+import { ArrowRight, ArrowLeft, Camera, CheckCircle, User, Mail, CreditCard, Settings } from "lucide-react";
 import PhotoCaptureModal from "@/components/photo-capture-modal";
 import QrDisplayModal from "@/components/qr-display-modal";
 
-const personalInfoSchema = z.object({
+// Step schemas for wizard form
+const basicDetailsSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
+  purpose: z.string().min(1, "Purpose of visit is required"),
+});
+
+const contactDetailsSchema = z.object({
   email: z.string().email("Valid email is required"),
   phone: z.string().min(1, "Phone number is required"),
   company: z.string().optional(),
-  purpose: z.string().min(1, "Purpose of visit is required"),
-  visitDate: z.string().min(1, "Visit date is required"),
-  visitTime: z.string().min(1, "Visit time is required"),
-  duration: z.string().min(1, "Duration is required"),
-  hostId: z.string().min(1, "Host selection is required"),
-  locationId: z.string().min(1, "Location selection is required"),
 });
 
-type PersonalInfoData = z.infer<typeof personalInfoSchema>;
+const idDetailsSchema = z.object({
+  idType: z.string().min(1, "ID type is required"),
+  idNumber: z.string().min(1, "ID number is required"),
+});
+
+const completeSchema = basicDetailsSchema.merge(contactDetailsSchema).merge(idDetailsSchema);
+
+type CompleteFormData = z.infer<typeof completeSchema>;
+type BasicDetailsData = z.infer<typeof basicDetailsSchema>;
+type ContactDetailsData = z.infer<typeof contactDetailsSchema>;
+type IdDetailsData = z.infer<typeof idDetailsSchema>;
 
 export default function VisitorRegistration() {
-  const [step, setStep] = useState(1);
-  const [personalInfo, setPersonalInfo] = useState<PersonalInfoData | null>(null);
-  const [photo, setPhoto] = useState<string | null>(null);
+  const [step, setStep] = useState(1); // 1: Basic, 2: Contact, 3: ID, 4: Selfie, 5: ID Photo, 6: Complete
+  const [formData, setFormData] = useState<Partial<CompleteFormData>>({});
+  const [selfiePhoto, setSelfiePhoto] = useState<string | null>(null);
+  const [idPhoto, setIdPhoto] = useState<string | null>(null);
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
+  const [photoType, setPhotoType] = useState<'selfie' | 'id'>('selfie');
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [registrationResult, setRegistrationResult] = useState<any>(null);
   const { toast } = useToast();
   const [, setLocation] = useLocation();
 
   // Navigation handlers
-  const handleCancel = () => {
-    setLocation("/");
+  const handleStaffLogin = () => {
+    setLocation("/staff");
   };
 
   const handleBack = () => {
@@ -54,31 +65,39 @@ export default function VisitorRegistration() {
     }
   };
 
-  const form = useForm<PersonalInfoData>({
-    resolver: zodResolver(personalInfoSchema),
+  const handleReset = () => {
+    setStep(1);
+    setFormData({});
+    setSelfiePhoto(null);
+    setIdPhoto(null);
+    setRegistrationResult(null);
+  };
+
+  // Create forms for each step
+  const basicForm = useForm<BasicDetailsData>({
+    resolver: zodResolver(basicDetailsSchema),
     defaultValues: {
-      firstName: "",
-      lastName: "",
-      email: "",
-      phone: "",
-      company: "",
-      purpose: "",
-      visitDate: new Date().toISOString().split('T')[0],
-      visitTime: "",
-      duration: "1 hour",
-      hostId: "",
-      locationId: "",
+      firstName: formData.firstName || "",
+      lastName: formData.lastName || "",
+      purpose: formData.purpose || "",
     },
   });
 
-  // Fetch hosts
-  const { data: hosts = [] } = useQuery({
-    queryKey: ["/api/hosts"],
+  const contactForm = useForm<ContactDetailsData>({
+    resolver: zodResolver(contactDetailsSchema),
+    defaultValues: {
+      email: formData.email || "",
+      phone: formData.phone || "",
+      company: formData.company || "",
+    },
   });
 
-  // Fetch locations
-  const { data: locations = [] } = useQuery({
-    queryKey: ["/api/locations"],
+  const idForm = useForm<IdDetailsData>({
+    resolver: zodResolver(idDetailsSchema),
+    defaultValues: {
+      idType: formData.idType || "",
+      idNumber: formData.idNumber || "",
+    },
   });
 
   // Registration mutation
@@ -89,7 +108,7 @@ export default function VisitorRegistration() {
     },
     onSuccess: (result) => {
       setRegistrationResult(result);
-      setStep(3);
+      setStep(6);
       toast({
         title: "Registration Successful",
         description: "Your visitor registration has been submitted for approval.",
@@ -104,36 +123,66 @@ export default function VisitorRegistration() {
     },
   });
 
-  const onSubmitPersonalInfo = (data: PersonalInfoData) => {
-    setPersonalInfo(data);
+  // Step handlers
+  const onSubmitBasic = (data: BasicDetailsData) => {
+    setFormData(prev => ({ ...prev, ...data }));
     setStep(2);
   };
 
+  const onSubmitContact = (data: ContactDetailsData) => {
+    setFormData(prev => ({ ...prev, ...data }));
+    setStep(3);
+  };
+
+  const onSubmitId = (data: IdDetailsData) => {
+    setFormData(prev => ({ ...prev, ...data }));
+    setStep(4);
+  };
+
   const handlePhotoCapture = (photoData: string) => {
-    setPhoto(photoData);
+    if (photoType === 'selfie') {
+      setSelfiePhoto(photoData);
+      setStep(5);
+    } else {
+      setIdPhoto(photoData);
+      setStep(6);
+    }
     setIsPhotoModalOpen(false);
   };
 
-  const submitRegistration = () => {
-    if (!personalInfo) return;
+  const openPhotoCapture = (type: 'selfie' | 'id') => {
+    setPhotoType(type);
+    setIsPhotoModalOpen(true);
+  };
 
-    const visitDateTime = new Date(`${personalInfo.visitDate}T${personalInfo.visitTime}`);
-    
+  const submitRegistration = async () => {
+    if (!selfiePhoto || !idPhoto) {
+      toast({
+        title: "Photos Required",
+        description: "Please capture both your selfie and ID photo to continue.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const visitorData = {
-      firstName: personalInfo.firstName,
-      lastName: personalInfo.lastName,
-      email: personalInfo.email,
-      phone: personalInfo.phone,
-      company: personalInfo.company || null,
-      photoUrl: photo,
+      name: `${formData.firstName} ${formData.lastName}`,
+      email: formData.email,
+      phone: formData.phone,
+      company: formData.company || "",
+      photoData: selfiePhoto,
+      badgeNumber: `VIS${Date.now()}`,
     };
 
     const visitRequestData = {
-      hostId: personalInfo.hostId,
-      locationId: parseInt(personalInfo.locationId),
-      purpose: personalInfo.purpose,
-      visitDate: visitDateTime.toISOString(),
-      duration: personalInfo.duration,
+      purpose: formData.purpose,
+      visitDate: new Date().toISOString().split('T')[0],
+      startTime: new Date().toTimeString().split(' ')[0],
+      endTime: new Date(Date.now() + 4 * 60 * 60 * 1000).toTimeString().split(' ')[0], // 4 hours later
+      hostId: "14309216", // Default host - in a real app, this would be configurable
+      locationId: 1, // Default location - in a real app, this would be configurable
+      status: "pending",
+      notes: `ID Type: ${formData.idType}, ID Number: ${formData.idNumber}`,
     };
 
     registrationMutation.mutate({
@@ -142,25 +191,33 @@ export default function VisitorRegistration() {
     });
   };
 
-  const progressValue = (step / 3) * 100;
+  const getStepIcon = (stepNumber: number) => {
+    const icons = [User, Mail, CreditCard, Camera, Camera, CheckCircle];
+    const Icon = icons[stepNumber - 1] || User;
+    return <Icon className="h-5 w-5" />;
+  };
+
+  const getStepTitle = (stepNumber: number) => {
+    const titles = ["Basic Details", "Contact Info", "ID Details", "Take Selfie", "ID Photo", "Complete"];
+    return titles[stepNumber - 1] || "Step";
+  };
+
+  const progressValue = (step / 6) * 100;
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
+      <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
-            <div className="flex items-center space-x-4">
-              <div className="flex-shrink-0">
-                <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-                  <Camera className="h-6 w-6 text-primary-foreground" />
-                </div>
-              </div>
-              <div>
-                <h1 className="text-xl font-semibold text-gray-900">Visitor Registration</h1>
-                <p className="text-sm text-gray-500">Complete your visit registration</p>
-              </div>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Visitor Registration</h1>
+              <p className="text-gray-600">Welcome! Please complete your registration below.</p>
             </div>
+            <Button variant="ghost" onClick={handleStaffLogin} className="text-sm">
+              <Settings className="h-4 w-4 mr-2" />
+              Staff Login
+            </Button>
           </div>
         </div>
       </header>
@@ -170,57 +227,41 @@ export default function VisitorRegistration() {
         <div className="mb-8">
           <div className="flex items-center justify-center mb-4">
             <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                  step >= 1 ? 'bg-primary text-primary-foreground' : 'bg-gray-300 text-gray-600'
-                }`}>
-                  <span className="text-sm font-medium">1</span>
+              {[1, 2, 3, 4, 5, 6].map((stepNumber) => (
+                <div key={stepNumber} className="flex items-center">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                    step >= stepNumber ? 'bg-primary text-primary-foreground' : 'bg-gray-300 text-gray-600'
+                  }`}>
+                    {getStepIcon(stepNumber)}
+                  </div>
+                  {stepNumber < 6 && <div className="w-8 h-0.5 bg-gray-300 mx-2"></div>}
                 </div>
-                <span className={`text-sm font-medium ${step >= 1 ? 'text-gray-900' : 'text-gray-500'}`}>
-                  Personal Info
-                </span>
-              </div>
-              <div className="w-12 h-0.5 bg-gray-300"></div>
-              <div className="flex items-center space-x-2">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                  step >= 2 ? 'bg-primary text-primary-foreground' : 'bg-gray-300 text-gray-600'
-                }`}>
-                  <span className="text-sm font-medium">2</span>
-                </div>
-                <span className={`text-sm ${step >= 2 ? 'text-gray-900' : 'text-gray-500'}`}>
-                  Photo
-                </span>
-              </div>
-              <div className="w-12 h-0.5 bg-gray-300"></div>
-              <div className="flex items-center space-x-2">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                  step >= 3 ? 'bg-primary text-primary-foreground' : 'bg-gray-300 text-gray-600'
-                }`}>
-                  <span className="text-sm font-medium">3</span>
-                </div>
-                <span className={`text-sm ${step >= 3 ? 'text-gray-900' : 'text-gray-500'}`}>
-                  Confirmation
-                </span>
-              </div>
+              ))}
             </div>
+          </div>
+          <div className="text-center mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">{getStepTitle(step)}</h2>
+            <p className="text-sm text-gray-600">Step {step} of 6</p>
           </div>
           <Progress value={progressValue} className="w-full" />
         </div>
 
-        {/* Step 1: Personal Information */}
+        {/* Step 1: Basic Details */}
         {step === 1 && (
           <Card>
             <CardHeader>
-              <CardTitle>Welcome to Our Office</CardTitle>
-              <p className="text-gray-600">Please provide your information to register for your visit.</p>
+              <CardTitle className="flex items-center">
+                <User className="mr-2 h-5 w-5" />
+                Basic Information
+              </CardTitle>
+              <p className="text-gray-600">Let's start with your basic details.</p>
             </CardHeader>
             <CardContent>
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmitPersonalInfo)} className="space-y-6">
-                  {/* Name Fields */}
+              <Form {...basicForm}>
+                <form onSubmit={basicForm.handleSubmit(onSubmitBasic)} className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField
-                      control={form.control}
+                      control={basicForm.control}
                       name="firstName"
                       render={({ field }) => (
                         <FormItem>
@@ -233,7 +274,7 @@ export default function VisitorRegistration() {
                       )}
                     />
                     <FormField
-                      control={form.control}
+                      control={basicForm.control}
                       name="lastName"
                       render={({ field }) => (
                         <FormItem>
@@ -247,62 +288,15 @@ export default function VisitorRegistration() {
                     />
                   </div>
 
-                  {/* Contact Information */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="email"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Email Address</FormLabel>
-                          <FormControl>
-                            <Input type="email" placeholder="john.doe@company.com" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="phone"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Phone Number</FormLabel>
-                          <FormControl>
-                            <Input type="tel" placeholder="+1 (555) 123-4567" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
-                  {/* Company */}
                   <FormField
-                    control={form.control}
-                    name="company"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Company (Optional)</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Acme Corporation" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  {/* Purpose of Visit */}
-                  <FormField
-                    control={form.control}
+                    control={basicForm.control}
                     name="purpose"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Purpose of Visit</FormLabel>
                         <FormControl>
                           <Textarea 
-                            rows={3} 
-                            placeholder="Business meeting, interview, delivery, etc." 
+                            placeholder="Please describe the purpose of your visit..."
                             {...field} 
                           />
                         </FormControl>
@@ -311,136 +305,9 @@ export default function VisitorRegistration() {
                     )}
                   />
 
-                  {/* Visit Details */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="visitDate"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Visit Date</FormLabel>
-                          <FormControl>
-                            <Input type="date" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="visitTime"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Time</FormLabel>
-                          <FormControl>
-                            <Input type="time" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="duration"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Duration</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select duration" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="1 hour">1 hour</SelectItem>
-                              <SelectItem value="2 hours">2 hours</SelectItem>
-                              <SelectItem value="Half day">Half day</SelectItem>
-                              <SelectItem value="Full day">Full day</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
-                  {/* Host Selection */}
-                  <FormField
-                    control={form.control}
-                    name="hostId"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Host</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select your host..." />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {(hosts as any[]).map((host: any) => (
-                              <SelectItem key={host.id} value={host.id}>
-                                {host.firstName} {host.lastName} - {host.role}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  {/* Location Selection */}
-                  <FormField
-                    control={form.control}
-                    name="locationId"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Location</FormLabel>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {(locations as any[]).map((location: any) => (
-                            <div key={location.id} className="relative">
-                              <input
-                                type="radio"
-                                name="location"
-                                id={`location-${location.id}`}
-                                value={location.id.toString()}
-                                onChange={(e) => field.onChange(e.target.value)}
-                                className="sr-only"
-                              />
-                              <label
-                                htmlFor={`location-${location.id}`}
-                                className={`block cursor-pointer border-2 rounded-lg p-4 transition-colors ${
-                                  field.value === location.id.toString()
-                                    ? 'border-primary bg-primary/5'
-                                    : 'border-gray-300 hover:border-primary'
-                                }`}
-                              >
-                                {location.imageUrl && (
-                                  <img
-                                    src={location.imageUrl}
-                                    alt={location.name}
-                                    className="w-full h-32 object-cover rounded-md mb-3"
-                                  />
-                                )}
-                                <h3 className="font-medium text-gray-900">{location.name}</h3>
-                                <p className="text-sm text-gray-500">{location.address}</p>
-                              </label>
-                            </div>
-                          ))}
-                        </div>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  {/* Action Buttons */}
-                  <div className="flex justify-end space-x-4 pt-6">
-                    <Button type="button" variant="outline" onClick={handleCancel}>
-                      Cancel
-                    </Button>
+                  <div className="flex justify-end">
                     <Button type="submit">
-                      Next Step <ArrowRight className="ml-2 h-4 w-4" />
+                      Next <ArrowRight className="ml-2 h-4 w-4" />
                     </Button>
                   </div>
                 </form>
@@ -449,42 +316,177 @@ export default function VisitorRegistration() {
           </Card>
         )}
 
-        {/* Step 2: Photo Capture */}
+        {/* Step 2: Contact Details */}
         {step === 2 && (
           <Card>
             <CardHeader>
-              <CardTitle>Capture Your Photo</CardTitle>
-              <p className="text-gray-600">
-                We need to take your photo for security purposes and visitor identification.
-              </p>
+              <CardTitle className="flex items-center">
+                <Mail className="mr-2 h-5 w-5" />
+                Contact Information
+              </CardTitle>
+              <p className="text-gray-600">How can we reach you?</p>
+            </CardHeader>
+            <CardContent>
+              <Form {...contactForm}>
+                <form onSubmit={contactForm.handleSubmit(onSubmitContact)} className="space-y-6">
+                  <FormField
+                    control={contactForm.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Email Address</FormLabel>
+                        <FormControl>
+                          <Input type="email" placeholder="john.doe@company.com" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={contactForm.control}
+                    name="phone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Phone Number</FormLabel>
+                        <FormControl>
+                          <Input placeholder="+1 (555) 123-4567" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={contactForm.control}
+                    name="company"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Company (Optional)</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Your company name" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <div className="flex justify-between">
+                    <Button type="button" variant="outline" onClick={handleBack}>
+                      <ArrowLeft className="mr-2 h-4 w-4" />
+                      Back
+                    </Button>
+                    <Button type="submit">
+                      Next <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </div>
+                </form>
+              </Form>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Step 3: ID Details */}
+        {step === 3 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <CreditCard className="mr-2 h-5 w-5" />
+                Identification
+              </CardTitle>
+              <p className="text-gray-600">Please provide your identification details.</p>
+            </CardHeader>
+            <CardContent>
+              <Form {...idForm}>
+                <form onSubmit={idForm.handleSubmit(onSubmitId)} className="space-y-6">
+                  <FormField
+                    control={idForm.control}
+                    name="idType"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>ID Type</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select ID type..." />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="passport">Passport</SelectItem>
+                            <SelectItem value="drivers-license">Driver's License</SelectItem>
+                            <SelectItem value="national-id">National ID</SelectItem>
+                            <SelectItem value="employee-id">Employee ID</SelectItem>
+                            <SelectItem value="other">Other</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={idForm.control}
+                    name="idNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>ID Number</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Enter your ID number" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <div className="flex justify-between">
+                    <Button type="button" variant="outline" onClick={handleBack}>
+                      <ArrowLeft className="mr-2 h-4 w-4" />
+                      Back
+                    </Button>
+                    <Button type="submit">
+                      Next <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </div>
+                </form>
+              </Form>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Step 4: Selfie Photo */}
+        {step === 4 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Camera className="mr-2 h-5 w-5" />
+                Take Your Selfie
+              </CardTitle>
+              <p className="text-gray-600">We need a clear photo of you for security purposes.</p>
             </CardHeader>
             <CardContent>
               <div className="text-center space-y-6">
-                {photo ? (
+                {selfiePhoto ? (
                   <div className="space-y-4">
-                    <img
-                      src={photo}
-                      alt="Captured photo"
-                      className="w-48 h-48 rounded-lg object-cover mx-auto border-2 border-gray-300"
-                    />
-                    <div className="flex justify-center space-x-4">
-                      <Button
-                        variant="outline"
-                        onClick={() => setPhoto(null)}
-                      >
-                        <RotateCcw className="mr-2 h-4 w-4" />
-                        Retake Photo
-                      </Button>
+                    <div className="w-64 h-64 mx-auto bg-gray-100 rounded-lg overflow-hidden">
+                      <img
+                        src={selfiePhoto}
+                        alt="Your selfie"
+                        className="w-full h-full object-cover"
+                      />
                     </div>
+                    <Button variant="outline" onClick={() => openPhotoCapture('selfie')}>
+                      <Camera className="mr-2 h-4 w-4" />
+                      Retake Selfie
+                    </Button>
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    <div className="w-48 h-48 bg-gray-100 rounded-lg mx-auto flex items-center justify-center border-2 border-dashed border-gray-300">
-                      <Camera className="h-12 w-12 text-gray-400" />
+                    <div className="w-64 h-64 bg-gray-100 rounded-lg mx-auto flex items-center justify-center border-2 border-dashed border-gray-300">
+                      <Camera className="h-16 w-16 text-gray-400" />
                     </div>
-                    <Button onClick={() => setIsPhotoModalOpen(true)}>
+                    <Button onClick={() => openPhotoCapture('selfie')}>
                       <Camera className="mr-2 h-4 w-4" />
-                      Capture Photo
+                      Take Selfie
                     </Button>
                   </div>
                 )}
@@ -495,19 +497,83 @@ export default function VisitorRegistration() {
                     <li>• Face the camera directly</li>
                     <li>• Ensure good lighting</li>
                     <li>• Remove hats and sunglasses</li>
-                    <li>• Use a plain background</li>
+                    <li>• Use a plain background if possible</li>
                   </ul>
                 </div>
 
-                {/* Action Buttons */}
-                <div className="flex justify-between pt-6">
+                <div className="flex justify-between">
+                  <Button variant="outline" onClick={handleBack}>
+                    <ArrowLeft className="mr-2 h-4 w-4" />
+                    Back
+                  </Button>
+                  <Button
+                    onClick={() => setStep(5)}
+                    disabled={!selfiePhoto}
+                  >
+                    Next <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Step 5: ID Photo */}
+        {step === 5 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Camera className="mr-2 h-5 w-5" />
+                Photograph Your ID
+              </CardTitle>
+              <p className="text-gray-600">Please take a clear photo of your identification document.</p>
+            </CardHeader>
+            <CardContent>
+              <div className="text-center space-y-6">
+                {idPhoto ? (
+                  <div className="space-y-4">
+                    <div className="w-64 h-64 mx-auto bg-gray-100 rounded-lg overflow-hidden">
+                      <img
+                        src={idPhoto}
+                        alt="Your ID"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <Button variant="outline" onClick={() => openPhotoCapture('id')}>
+                      <Camera className="mr-2 h-4 w-4" />
+                      Retake ID Photo
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="w-64 h-64 bg-gray-100 rounded-lg mx-auto flex items-center justify-center border-2 border-dashed border-gray-300">
+                      <CreditCard className="h-16 w-16 text-gray-400" />
+                    </div>
+                    <Button onClick={() => openPhotoCapture('id')}>
+                      <Camera className="mr-2 h-4 w-4" />
+                      Photograph ID
+                    </Button>
+                  </div>
+                )}
+
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                  <h4 className="font-medium text-amber-900 mb-2">ID Photo Tips:</h4>
+                  <ul className="text-sm text-amber-800 space-y-1">
+                    <li>• Ensure all text is clearly readable</li>
+                    <li>• Place ID on a flat, well-lit surface</li>
+                    <li>• Avoid shadows and glare</li>
+                    <li>• Include all corners of the document</li>
+                  </ul>
+                </div>
+
+                <div className="flex justify-between">
                   <Button variant="outline" onClick={handleBack}>
                     <ArrowLeft className="mr-2 h-4 w-4" />
                     Back
                   </Button>
                   <Button
                     onClick={submitRegistration}
-                    disabled={!photo || registrationMutation.isPending}
+                    disabled={!idPhoto || registrationMutation.isPending}
                   >
                     {registrationMutation.isPending ? "Submitting..." : "Complete Registration"}
                     <ArrowRight className="ml-2 h-4 w-4" />
@@ -518,11 +584,14 @@ export default function VisitorRegistration() {
           </Card>
         )}
 
-        {/* Step 3: Confirmation */}
-        {step === 3 && registrationResult && (
+        {/* Step 6: Completion */}
+        {step === 6 && registrationResult && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-center text-green-600">Registration Complete!</CardTitle>
+              <CardTitle className="text-center text-green-600 flex items-center justify-center">
+                <CheckCircle className="mr-2 h-6 w-6" />
+                Registration Complete!
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-center space-y-6">
@@ -537,7 +606,7 @@ export default function VisitorRegistration() {
 
                 <div className="space-y-2">
                   <h3 className="text-xl font-semibold text-gray-900">
-                    {personalInfo?.firstName} {personalInfo?.lastName}
+                    {formData.firstName} {formData.lastName}
                   </h3>
                   <p className="text-gray-600">Badge Number: {registrationResult.badgeNumber}</p>
                   <p className="text-sm text-gray-500">
@@ -556,23 +625,12 @@ export default function VisitorRegistration() {
                     className="w-full"
                     onClick={() => setIsQrModalOpen(true)}
                   >
-                    <Download className="mr-2 h-4 w-4" />
-                    Download QR Code
-                  </Button>
-                  <Button variant="outline" className="w-full">
-                    <Printer className="mr-2 h-4 w-4" />
-                    Printer Badge
+                    View QR Code
                   </Button>
                   <Button
                     variant="outline"
                     className="w-full"
-                    onClick={() => {
-                      setStep(1);
-                      setPersonalInfo(null);
-                      setPhoto(null);
-                      setRegistrationResult(null);
-                      form.reset();
-                    }}
+                    onClick={handleReset}
                   >
                     Register Another Visitor
                   </Button>
@@ -596,7 +654,7 @@ export default function VisitorRegistration() {
           onClose={() => setIsQrModalOpen(false)}
           qrCodeData={registrationResult.qrCodeData}
           badgeNumber={registrationResult.badgeNumber}
-          visitorName={`${personalInfo?.firstName} ${personalInfo?.lastName}`}
+          visitorName={`${formData.firstName} ${formData.lastName}`}
         />
       )}
     </div>

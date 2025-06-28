@@ -17,20 +17,11 @@ function Router() {
 
   return (
     <Switch>
-      {isLoading || !isAuthenticated ? (
-        <>
-          <Route path="/" component={Landing} />
-          <Route path="/register" component={VisitorRegistration} />
-        </>
-      ) : (
-        <>
-          <Route path="/" component={Home} />
-          <Route path="/register" component={VisitorRegistration} />
-          <Route path="/host" component={HostDashboard} />
-          <Route path="/reception" component={ReceptionInterface} />
-          <Route path="/admin" component={AdminPanel} />
-        </>
-      )}
+      <Route path="/" component={VisitorRegistration} />
+      <Route path="/staff" component={isAuthenticated ? Home : Landing} />
+      <Route path="/host" component={HostDashboard} />
+      <Route path="/reception" component={ReceptionInterface} />
+      <Route path="/admin" component={AdminPanel} />
       <Route component={NotFound} />
     </Switch>
   );

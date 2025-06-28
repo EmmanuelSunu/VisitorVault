@@ -20,16 +20,23 @@ export default function PhotoCaptureModal({ isOpen, onClose, onCapture }: PhotoC
   const startCamera = useCallback(async () => {
     try {
       setError(null);
+      setIsStreaming(false);
       const mediaStream = await initializeCamera();
       setStream(mediaStream);
       
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
-        videoRef.current.play();
-        setIsStreaming(true);
+        videoRef.current.onloadedmetadata = () => {
+          videoRef.current?.play().then(() => {
+            setIsStreaming(true);
+          }).catch((err) => {
+            console.error('Error playing video:', err);
+            setError('Failed to start video stream.');
+          });
+        };
       }
     } catch (err) {
-      setError('Failed to access camera. Please check permissions.');
+      setError(err instanceof Error ? err.message : 'Failed to access camera. Please check permissions.');
       console.error('Camera initialization error:', err);
     }
   }, []);
