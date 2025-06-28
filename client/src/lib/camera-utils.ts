@@ -75,12 +75,21 @@ export async function initializeCamera(constraints: CameraConstraints = {}): Pro
 }
 
 export function capturePhoto(videoElement: HTMLVideoElement): string {
+  console.log('capturePhoto called with video:', {
+    readyState: videoElement.readyState,
+    HAVE_ENOUGH_DATA: videoElement.HAVE_ENOUGH_DATA,
+    videoWidth: videoElement.videoWidth,
+    videoHeight: videoElement.videoHeight,
+    currentTime: videoElement.currentTime,
+    paused: videoElement.paused
+  });
+
   if (!videoElement) {
     throw new Error('Video element is required');
   }
 
   if (videoElement.readyState !== videoElement.HAVE_ENOUGH_DATA) {
-    throw new Error('Video not ready for capture');
+    throw new Error(`Video not ready for capture. Ready state: ${videoElement.readyState}, required: ${videoElement.HAVE_ENOUGH_DATA}`);
   }
 
   // Create canvas element

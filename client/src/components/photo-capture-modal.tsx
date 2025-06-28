@@ -113,14 +113,26 @@ export default function PhotoCaptureModal({ isOpen, onClose, onCapture }: PhotoC
   }, [isStreaming]);
 
   const handleCapture = useCallback(() => {
+    console.log('Capture button clicked - current state:', { 
+      hasVideoRef: !!videoRef.current, 
+      isStreaming, 
+      videoReadyState: videoRef.current?.readyState,
+      videoWidth: videoRef.current?.videoWidth,
+      videoHeight: videoRef.current?.videoHeight
+    });
+    
     if (videoRef.current && isStreaming) {
       try {
         const photoData = capturePhoto(videoRef.current);
         setCapturedPhoto(photoData);
+        console.log('Photo captured successfully');
       } catch (err) {
         setError('Failed to capture photo. Please try again.');
         console.error('Photo capture error:', err);
       }
+    } else {
+      console.log('Cannot capture: video element or streaming not ready');
+      setError('Camera not ready. Please wait a moment and try again.');
     }
   }, [isStreaming]);
 
@@ -144,9 +156,20 @@ export default function PhotoCaptureModal({ isOpen, onClose, onCapture }: PhotoC
     if (stream && isStreaming) {
       console.log('Camera already working, reattaching stream to video element');
       if (videoRef.current) {
-        videoRef.current.srcObject = stream;
+        const video = videoRef.current;
+        video.srcObject = stream;
+        
+        // Wait for video to be ready before considering it streaming
+        const handleVideoReady = () => {
+          console.log('Video reattached and ready for retake, ready state:', video.readyState);
+          setIsStreaming(true);
+        };
+        
+        video.addEventListener('loadedmetadata', handleVideoReady, { once: true });
+        video.addEventListener('canplay', handleVideoReady, { once: true });
+        
         // Make sure video is playing
-        videoRef.current.play().catch((err) => {
+        video.play().catch((err) => {
           console.error('Error playing video on retake:', err);
         });
       }
