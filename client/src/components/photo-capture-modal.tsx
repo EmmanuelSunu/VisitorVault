@@ -140,8 +140,16 @@ export default function PhotoCaptureModal({ isOpen, onClose, onCapture }: PhotoC
     }
     
     // If both stream and isStreaming are true, camera should already be working
+    // But we need to ensure the video element has the stream attached
     if (stream && isStreaming) {
-      console.log('Camera already working, nothing to restart');
+      console.log('Camera already working, reattaching stream to video element');
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        // Make sure video is playing
+        videoRef.current.play().catch((err) => {
+          console.error('Error playing video on retake:', err);
+        });
+      }
       return;
     }
     
