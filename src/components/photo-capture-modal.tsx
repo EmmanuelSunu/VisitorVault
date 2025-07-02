@@ -60,80 +60,37 @@ export default function PhotoCaptureModal({ isOpen, onClose, onCapture }: PhotoC
       if (videoRef.current) {
         const video = videoRef.current;
         video.srcObject = mediaStream;
-        
-        console.log('Setting video srcObject and attempting to play...');
-        
-        // Simple approach: set autoplay and directly try to play
         video.autoplay = true;
         video.muted = true;
         video.playsInline = true;
-        
-        // Use a more direct approach
-        const playVideo = async () => {
-          try {
-            await video.play();
-            console.log('Video playing successfully');
-            setIsStreaming(true);
-          } catch (err) {
-            console.error('Error playing video:', err);
-            setError('Failed to start video stream.');
-          }
-        };
 
-        // Try to play immediately
-        playVideo();
-        
-        // Also listen for the loadedmetadata event as backup
-        const handleLoadedMetadata = () => {
-          console.log('Video metadata loaded, video ready state:', video.readyState);
-          console.log('Video dimensions:', video.videoWidth, 'x', video.videoHeight);
-          if (!isStreaming) {
-            playVideo();
-          }
-        };
-
-        // Listen for playing event
-        const handlePlaying = () => {
-          console.log('Video playing event fired');
-          setIsStreaming(true);
-        };
-
-        video.addEventListener('loadedmetadata', handleLoadedMetadata);
-        video.addEventListener('playing', handlePlaying);
-        
-        // Clear any existing timeouts
-        if (timeoutRefs.current.force) clearTimeout(timeoutRefs.current.force);
-        if (timeoutRefs.current.error) clearTimeout(timeoutRefs.current.error);
-        
-        // Set a very short timeout to force streaming state
-        timeoutRefs.current.force = setTimeout(() => {
-          console.log('Force timeout - current streaming state:', isStreaming);
-          console.log('Video dimensions:', video.videoWidth, 'x', video.videoHeight);
-          console.log('Video ready state:', video.readyState);
+        // Helper to check if video is ready
+        const checkVideoReady = () => {
           if (video.videoWidth > 0 && video.videoHeight > 0) {
-            console.log('Video has dimensions, forcing streaming state');
+            if (!isStreaming) {
+              setIsStreaming(true);
+              startCountdownTimer();
+              console.log('Video has dimensions, streaming set to true');
+            }
+          } else {
+            // Try again in 100ms
+            setTimeout(checkVideoReady, 100);
+          }
+        };
+        checkVideoReady();
+
+        // Listen for playing event as backup
+        const handlePlaying = () => {
+          if (!isStreaming) {
             setIsStreaming(true);
             startCountdownTimer();
-          } else if (stream && stream.active) {
-            console.log('Stream is active, forcing streaming state anyway');
-            setIsStreaming(true);
-            startCountdownTimer();
+            console.log('Video playing event fired, streaming set to true');
           }
-        }, 1000);
-        
-        // Set a longer timeout for errors (only if stream isn't working)
-        timeoutRefs.current.error = setTimeout(() => {
-          if (!isStreaming && (!stream || !stream.active)) {
-            console.error('Camera initialization timeout');
-            setError('Camera initialization took too long. Please try again.');
-          }
-        }, 10000);
-        
+        };
+        video.addEventListener('playing', handlePlaying);
+
         // Cleanup function
         return () => {
-          if (timeoutRefs.current.force) clearTimeout(timeoutRefs.current.force);
-          if (timeoutRefs.current.error) clearTimeout(timeoutRefs.current.error);
-          video.removeEventListener('loadedmetadata', handleLoadedMetadata);
           video.removeEventListener('playing', handlePlaying);
         };
       }
@@ -141,7 +98,7 @@ export default function PhotoCaptureModal({ isOpen, onClose, onCapture }: PhotoC
       console.error('Camera initialization error:', err);
       setError(err instanceof Error ? err.message : 'Failed to access camera. Please check permissions.');
     }
-  }, [isStreaming]);
+  }, [isStreaming, startCountdownTimer]);
 
   const handleCapture = useCallback(() => {
     console.log('Capture button clicked - current state:', { 
@@ -299,7 +256,16 @@ export default function PhotoCaptureModal({ isOpen, onClose, onCapture }: PhotoC
           {/* Error Message */}
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-              <p className="text-red-800 text-sm">{error}</p>
+              <p className="text-red-800 text-sm font-medium mb-2">{error}</p>
+              <div className="text-red-700 text-xs space-y-1">
+                <p><strong>Troubleshooting:</strong></p>
+                <ul className="list-disc list-inside space-y-1 ml-2">
+                  <li>Allow camera permissions in your browser</li>
+                  <li>Make sure no other apps are using the camera</li>
+                  <li>Try refreshing the page and try again</li>
+                  <li>Check if your camera is working in other applications</li>
+                </ul>
+              </div>
             </div>
           )}
 

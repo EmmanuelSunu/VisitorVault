@@ -20,6 +20,11 @@ export async function initializeCamera(constraints: CameraConstraints = {}): Pro
 
   console.log('Requesting camera access with constraints:', { width, height, facingMode });
 
+  // Check if we're on HTTPS (required for camera access in production)
+  if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+    throw new Error('Camera access requires HTTPS. Please use a secure connection.');
+  }
+
   try {
     // Try with ideal constraints first
     let mediaConstraints: MediaStreamConstraints = {
@@ -32,7 +37,15 @@ export async function initializeCamera(constraints: CameraConstraints = {}): Pro
     };
 
     console.log('Attempting getUserMedia with ideal constraints...');
-    let stream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+    
+    // Add a timeout to the getUserMedia call
+    const stream = await Promise.race([
+      navigator.mediaDevices.getUserMedia(mediaConstraints),
+      new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('Camera access timeout')), 10000)
+      )
+    ]);
+    
     console.log('Camera stream obtained successfully:', stream);
     return stream;
   } catch (error) {
@@ -48,7 +61,15 @@ export async function initializeCamera(constraints: CameraConstraints = {}): Pro
       };
       
       console.log('Attempting getUserMedia with basic constraints...');
-      const stream = await navigator.mediaDevices.getUserMedia(basicConstraints);
+      
+      // Add a timeout to the fallback getUserMedia call
+      const stream = await Promise.race([
+        navigator.mediaDevices.getUserMedia(basicConstraints),
+        new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error('Camera access timeout')), 10000)
+        )
+      ]);
+      
       console.log('Camera stream obtained with basic constraints:', stream);
       return stream;
     } catch (fallbackError) {
@@ -57,20 +78,23 @@ export async function initializeCamera(constraints: CameraConstraints = {}): Pro
       if (fallbackError instanceof Error) {
         switch (fallbackError.name) {
           case 'NotAllowedError':
-            throw new Error('Camera access denied. Please allow camera permissions and try again.');
+            throw new Error('Camera access denied. Please allow camera permissions in your browser settings and try again.');
           case 'NotFoundError':
-            throw new Error('No camera found on this device.');
+            throw new Error('No camera found on this device. Please connect a camera and try again.');
           case 'NotReadableError':
-            throw new Error('Camera is currently in use by another application.');
+            throw new Error('Camera is currently in use by another application. Please close other apps using the camera and try again.');
           case 'OverconstrainedError':
-            throw new Error('Camera does not support the requested configuration.');
+            throw new Error('Camera does not support the requested configuration. Please try again.');
           default:
+            if (fallbackError.message.includes('timeout')) {
+              throw new Error('Camera access timed out. Please check your camera permissions and try again.');
+            }
             throw new Error(`Camera error: ${fallbackError.message}`);
         }
       }
     }
     
-    throw new Error('Failed to access camera');
+    throw new Error('Failed to access camera. Please check your camera permissions and try again.');
   }
 }
 

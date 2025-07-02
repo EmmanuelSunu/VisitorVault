@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Download, Printer, RotateCcw } from "lucide-react";
@@ -22,11 +22,11 @@ export default function QrDisplayModal({
   const qrCanvasRef = useRef<HTMLCanvasElement>(null);
 
   // Generate QR code when modal opens
-  useState(() => {
+  useEffect(() => {
     if (isOpen && qrCanvasRef.current) {
       generateQRCode(qrCodeData, qrCanvasRef.current);
     }
-  });
+  }, [isOpen, qrCodeData]);
 
   const handleDownload = () => {
     if (qrCanvasRef.current) {

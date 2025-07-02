@@ -13,15 +13,8 @@ export default function RoleTabs() {
 
   const tabs = [
     {
-      id: "visitor",
-      label: "Visitor Registration",
-      icon: UserPlus,
-      path: "/register",
-      roles: ["admin", "host", "reception"], // Available to all authenticated users
-    },
-    {
       id: "host",
-      label: "Host Dashboard",
+      label: "Reception Dashboard",
       icon: UserCheck,
       path: "/host",
       roles: ["host", "admin"],
@@ -43,7 +36,7 @@ export default function RoleTabs() {
   ];
 
   const availableTabs = tabs.filter(tab => 
-    tab.roles.includes(user.role) || tab.id === "visitor"
+    tab.roles.includes(user.role)
   );
 
   const isActive = (path: string) => {

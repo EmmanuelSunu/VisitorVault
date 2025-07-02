@@ -28,7 +28,7 @@ export default function Header() {
               </div>
             </div>
             <div>
-              <h1 className="text-xl font-semibold text-gray-900">SecureVisit Pro</h1>
+              <h1 className="text-xl font-semibold text-gray-900">Desiderata Visitor Management System</h1>
               <p className="text-sm text-gray-500">Visitor Management System</p>
             </div>
           </div>

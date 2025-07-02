@@ -53,7 +53,7 @@ export default function Landing() {
             <Button 
               variant="outline" 
               size="lg"
-              onClick={() => window.location.href = "/api/login"}
+              onClick={() => setLocation("/staff-login")}
               className="px-8 py-3"
             >
               Staff Sign In
