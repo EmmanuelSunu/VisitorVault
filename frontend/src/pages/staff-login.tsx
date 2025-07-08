@@ -8,24 +8,28 @@ import { Input } from "@/components/ui/input";
 export default function StaffLogin() {
   const { login } = useAuth();
   const [, setLocation] = useLocation();
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
-    setTimeout(() => {
-      const result = login(username, password);
-      setLoading(false);
-      if (result.success) {
-        setLocation("/host");
+    
+    try {
+      const result = await login(email, password);
+      if (result.success && result.user) {
+        setLocation('/host');
       } else {
-        setError("Invalid credentials. Try host/host123 or admin/admin123.");
+        setError(result.message || "Login failed. Please check your credentials.");
       }
-    }, 500);
+    } catch (err) {
+      setError("An error occurred during login. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -37,12 +41,25 @@ export default function StaffLogin() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label className="block text-sm font-medium mb-1">Username</label>
-              <Input value={username} onChange={e => setUsername(e.target.value)} required autoFocus />
+              <label className="block text-sm font-medium mb-1">Email</label>
+              <Input 
+                type="email"
+                value={email} 
+                onChange={e => setEmail(e.target.value)} 
+                required 
+                autoFocus 
+                placeholder="Enter your email"
+              />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">Password</label>
-              <Input type="password" value={password} onChange={e => setPassword(e.target.value)} required />
+              <Input 
+                type="password" 
+                value={password} 
+                onChange={e => setPassword(e.target.value)} 
+                required 
+                placeholder="Enter your password"
+              />
             </div>
             {error && <div className="text-red-600 text-sm">{error}</div>}
             <Button type="submit" className="w-full" disabled={loading}>

@@ -3,7 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\User;
-// use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+use App\Models\Visitor;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
@@ -13,11 +13,58 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // User::factory(10)->create();
-
+        // Create admin user
         User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
+            'name' => 'Admin User',
+            'email' => 'admin@example.com',
+            'role' => 'admin'
         ]);
+
+        // Create receptionist
+        User::factory()->create([
+            'name' => 'Reception Staff',
+            'email' => 'reception@example.com',
+            'role' => 'receptionist'
+        ]);
+
+        // Create some host users
+        $hosts = User::factory()->count(5)->host()->create();
+
+        // Create visitors for each host
+        foreach ($hosts as $host) {
+            // Pending visitors
+            Visitor::factory()
+                ->count(3)
+                ->forHost($host)
+                ->create();
+
+            // Approved visitors
+            Visitor::factory()
+                ->count(2)
+                ->forHost($host)
+                ->approved()
+                ->create();
+
+            // Rejected visitors
+            Visitor::factory()
+                ->count(1)
+                ->forHost($host)
+                ->rejected()
+                ->create();
+
+            // Currently checked in visitors
+            Visitor::factory()
+                ->count(1)
+                ->forHost($host)
+                ->checkedIn()
+                ->create();
+
+            // Completed visits
+            Visitor::factory()
+                ->count(3)
+                ->forHost($host)
+                ->completed()
+                ->create();
+        }
     }
 }

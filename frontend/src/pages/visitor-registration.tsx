@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -60,6 +60,46 @@ export default function VisitorRegistration() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
 
+  const { api } = useAuth();
+  
+  // Registration mutation using real API
+  const registrationMutation = useMutation({
+    mutationFn: async (data: {
+      f_name: string;
+      l_name: string;
+      purpose: string;
+      email: string;
+      phone: string;
+      company?: string;
+      h_name: string;
+      h_email: string;
+      h_phone: string;
+      id_type: string;
+      id_number: string;
+      pic: string;
+      id_pic: string;
+      visit_date: string;
+    }) => {
+      const response = await api.post('/visitor/register', data);
+      return response.data;
+    },
+    onSuccess: (data) => {
+      setRegistrationResult(data);
+      setStep(6);
+      toast({
+        title: 'Registration Successful',
+        description: 'Your visitor registration has been submitted for approval.',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Registration Failed',
+        description: error.response?.data?.message || 'Failed to submit registration',
+        variant: 'destructive',
+      });
+    },
+  });
+
   // Navigation handlers
   const handleStaffLogin = () => {
     setLocation("/staff-login");
@@ -103,39 +143,6 @@ export default function VisitorRegistration() {
     },
   });
 
-  // Registration mutation (localStorage version)
-  const registrationMutation = {
-    mutate: (data: { visitor: any; visitRequest: any }) => {
-      // Get existing requests
-      const existing = JSON.parse(localStorage.getItem('visitRequests') || '[]');
-      
-      // Assign a unique ID
-      const id = Date.now();
-      const newRequest = {
-        id,
-        visitor: { ...data.visitor, id, photoUrl: data.visitor.photoData },
-        ...data.visitRequest,
-        status: 'pending',
-        createdAt: new Date().toISOString(),
-      };
-      
-      localStorage.setItem('visitRequests', JSON.stringify([newRequest, ...existing]));
-      
-      // Trigger a storage event for other tabs
-      window.dispatchEvent(new StorageEvent('storage', { key: 'visitRequests' }));
-      
-      const result = { badgeNumber: data.visitor.badgeNumber, qrCodeData: id };
-      setRegistrationResult(result);
-      setStep(6);
-      
-      toast({
-        title: 'Registration Successful',
-        description: 'Your visitor registration has been submitted for approval.',
-      });
-    },
-    isPending: false,
-  };
-
   // Step handlers
   const onSubmitCombined = (data: CombinedData) => {
     setFormData(prev => ({ ...prev, ...data }));
@@ -173,34 +180,24 @@ export default function VisitorRegistration() {
       return;
     }
 
-    const visitorData = {
-      name: `${formData.firstName} ${formData.lastName}`,
-      email: formData.email,
-      phone: formData.phone,
-      company: formData.company || "",
-      photoData: selfiePhoto,
-      badgeNumber: `VIS${Date.now()}`,
+    const registrationData = {
+      f_name: formData.firstName!,
+      l_name: formData.lastName!,
+      purpose: formData.purpose!,
+      email: formData.email!,
+      phone: formData.phone!,
+      company: formData.company,
+      h_name: formData.hostName!,
+      h_email: formData.hostEmail!,
+      h_phone: formData.hostPhone!,
+      id_type: formData.idType!,
+      id_number: formData.idNumber!,
+      pic: selfiePhoto,
+      id_pic: idPhoto,
+      visit_date: new Date().toISOString().split('T')[0],
     };
 
-    const visitRequestData = {
-      purpose: formData.purpose,
-      visitDate: new Date().toISOString().split('T')[0],
-      startTime: new Date().toTimeString().split(' ')[0],
-      endTime: new Date(Date.now() + 4 * 60 * 60 * 1000).toTimeString().split(' ')[0], // 4 hours later
-      hostId: "14309216", // Default host - in a real app, this would be configurable
-      locationId: 1, // Default location - in a real app, this would be configurable
-      status: "pending",
-      notes: `ID Type: ${formData.idType}, ID Number: ${formData.idNumber}`,
-      hostName: formData.hostName,
-      hostEmail: formData.hostEmail,
-      hostPhone: formData.hostPhone,
-      idPhoto: idPhoto,
-    };
-
-    registrationMutation.mutate({
-      visitor: visitorData,
-      visitRequest: visitRequestData,
-    });
+    registrationMutation.mutate(registrationData);
   };
 
   const getStepIcon = (stepNumber: number) => {

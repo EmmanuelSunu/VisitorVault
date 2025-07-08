@@ -1,0 +1,18 @@
+meta {
+  name: login
+  type: http
+  seq: 1
+}
+
+post {
+  url: http://visitorvault.test/api/test
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+      "email": "admin@example.com",
+      "password": "password"
+  }
+}
