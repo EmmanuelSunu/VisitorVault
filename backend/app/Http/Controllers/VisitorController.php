@@ -209,6 +209,166 @@ class VisitorController extends Controller
     }
 
     /**
+     * Get list of currently checked in visitors
+     */
+    public function checkedIn()
+    {
+        $visitors = Visitor::query()
+            ->with(['host'])
+            ->whereNotNull('check_in_time')
+            ->whereNull('check_out_time')
+            ->latest('check_in_time')
+            ->get()
+            ->map(function ($visitor) {
+                return [
+                    'id' => $visitor->id,
+                    'visitor' => [
+                        'firstName' => $visitor->f_name,
+                        'lastName' => $visitor->l_name,
+                        'photoUrl' => $visitor->pic ? url('storage/' . $visitor->pic) : null,
+                    ],
+                    'host' => [
+                        'firstName' => $visitor->h_name,
+                        'lastName' => '', // Host last name is not stored separately in current schema
+                    ],
+                    'checkedInAt' => $visitor->check_in_time,
+                    'duration' => $visitor->visit_duration ?? '2 hours', // Default duration if not specified
+                ];
+            });
+
+        return response()->json($visitors);
+    }
+
+    /**
+     * Search visitors by name, company, or badge number
+     */
+    public function search(Request $request)
+    {
+        $query = $request->get('q');
+
+        if (empty($query)) {
+            return response()->json([]);
+        }
+
+        $visitors = Visitor::query()
+            ->where(function ($q) use ($query) {
+                $q->where('f_name', 'like', "%{$query}%")
+                    ->orWhere('l_name', 'like', "%{$query}%")
+                    ->orWhere('company', 'like', "%{$query}%")
+                    ->orWhere('id_number', 'like', "%{$query}%");
+            })
+            ->with('host')
+            ->latest()
+            ->limit(10)
+            ->get()
+            ->map(function ($visitor) {
+                return [
+                    'id' => $visitor->id,
+                    'firstName' => $visitor->f_name,
+                    'lastName' => $visitor->l_name,
+                    'company' => $visitor->company,
+                    'badgeNumber' => $visitor->id_number,
+                    'photoUrl' => $visitor->pic ? url('storage/' . $visitor->pic) : null,
+                    'visitRequests' => [[
+                        'id' => $visitor->id,
+                        'status' => $visitor->check_out_time ? 'checked_out' : ($visitor->check_in_time ? 'checked_in' : ($visitor->status ?? 'pending')),
+                        'checkedInAt' => $visitor->check_in_time,
+                        'checkedOutAt' => $visitor->check_out_time,
+                        'duration' => $visitor->visit_duration ?? '2 hours',
+                        'host' => [
+                            'id' => $visitor->user_id,
+                            'firstName' => $visitor->h_name,
+                            'lastName' => '', // Host last name is not stored separately in current schema
+                        ],
+                    ]],
+                ];
+            });
+
+        return response()->json($visitors);
+    }
+
+    /**
+     * Find visitor by badge number
+     */
+    public function findByBadge($badgeNumber)
+    {
+        $visitor = Visitor::where('id_number', $badgeNumber)
+            ->with('host')
+            ->first();
+
+        if (!$visitor) {
+            return response()->json(['message' => 'Visitor not found'], 404);
+        }
+
+        return response()->json([
+            'id' => $visitor->id,
+            'firstName' => $visitor->f_name,
+            'lastName' => $visitor->l_name,
+            'company' => $visitor->company,
+            'badgeNumber' => $visitor->id_number,
+            'photoUrl' => $visitor->pic ? url('storage/' . $visitor->pic) : null,
+            'visitRequests' => [[
+                'id' => $visitor->id,
+                'status' => $visitor->check_out_time ? 'checked_out' : ($visitor->check_in_time ? 'checked_in' : ($visitor->status ?? 'pending')),
+                'checkedInAt' => $visitor->check_in_time,
+                'checkedOutAt' => $visitor->check_out_time,
+                'duration' => $visitor->visit_duration ?? '2 hours',
+                'host' => [
+                    'id' => $visitor->user_id,
+                    'firstName' => $visitor->h_name,
+                    'lastName' => '', // Host last name is not stored separately in current schema
+                ],
+            ]],
+        ]);
+    }
+
+    /**
+     * Check in a visitor
+     */
+    public function checkInVisitor($id)
+    {
+        $visitor = Visitor::findOrFail($id);
+
+        if ($visitor->check_in_time) {
+            return response()->json(['message' => 'Visitor is already checked in'], 422);
+        }
+
+        if ($visitor->status !== 'approved') {
+            return response()->json(['message' => 'Visit must be approved before check-in'], 422);
+        }
+
+        $visitor->update([
+            'check_in_time' => now(),
+            'status' => 'checked_in'
+        ]);
+
+        return response()->json(['message' => 'Visitor checked in successfully']);
+    }
+
+    /**
+     * Check out a visitor
+     */
+    public function checkOutVisitor($id)
+    {
+        $visitor = Visitor::findOrFail($id);
+
+        if (!$visitor->check_in_time) {
+            return response()->json(['message' => 'Visitor must be checked in first'], 422);
+        }
+
+        if ($visitor->check_out_time) {
+            return response()->json(['message' => 'Visitor is already checked out'], 422);
+        }
+
+        $visitor->update([
+            'check_out_time' => now(),
+            'status' => 'checked_out'
+        ]);
+
+        return response()->json(['message' => 'Visitor checked out successfully']);
+    }
+
+    /**
      * Get recent visitor activity logs
      */
     public function activityLogs(Request $request)

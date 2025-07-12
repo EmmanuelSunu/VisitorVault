@@ -43,6 +43,11 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Protected visitor routes
     Route::get('/visitors', [VisitorController::class, 'index']);
+    Route::get('/visitors/checked-in', [VisitorController::class, 'checkedIn']);
+    Route::get('/visitors/search', [VisitorController::class, 'search']);
+    Route::get('/visitors/badge/{badgeNumber}', [VisitorController::class, 'findByBadge']);
+    Route::patch('/visitors/{visitor}/check-in', [VisitorController::class, 'checkInVisitor']);
+    Route::patch('/visitors/{visitor}/check-out', [VisitorController::class, 'checkOutVisitor']);
     Route::get('/visitor/{visitor}', [VisitorController::class, 'show']);
     Route::patch('/visitor/{visitor}', [VisitorController::class, 'update']);
     Route::delete('/visitor/{visitor}', [VisitorController::class, 'destroy']);

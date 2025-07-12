@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { useEffect } from "react";
 import Header from "@/components/header";
@@ -13,11 +13,49 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { QrCode, Search, UserCheck, UserX, AlertTriangle, FileOutput, Camera, Building } from "lucide-react";
 
+interface Visitor {
+  id: number;
+  firstName: string;
+  lastName: string;
+  company: string;
+  badgeNumber: string;
+  photoUrl?: string;
+  visitRequests: VisitRequest[];
+}
+
+interface VisitRequest {
+  id: number;
+  status: 'pending' | 'approved' | 'rejected' | 'checked_in' | 'checked_out';
+  checkedInAt?: string;
+  checkedOutAt?: string;
+  duration: string;
+  host: {
+    id: number;
+    firstName: string;
+    lastName: string;
+  };
+}
+
+interface CheckedInVisitor {
+  id: number;
+  visitor: {
+    firstName: string;
+    lastName: string;
+    photoUrl?: string;
+  };
+  host: {
+    firstName: string;
+    lastName: string;
+  };
+  checkedInAt: string;
+  duration: string;
+}
+
 export default function ReceptionInterface() {
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isLoading, api } = useAuth();
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedVisitor, setSelectedVisitor] = useState<any>(null);
+  const [selectedVisitor, setSelectedVisitor] = useState<Visitor | null>(null);
   const [manualBadgeNumber, setManualBadgeNumber] = useState("");
 
   // Redirect if not authenticated
@@ -36,8 +74,12 @@ export default function ReceptionInterface() {
   }, [isAuthenticated, isLoading, toast]);
 
   // Fetch currently checked in visitors
-  const { data: checkedInVisitors = [], isLoading: loadingCheckedIn } = useQuery({
-    queryKey: ["/api/visit-requests/checked-in"],
+  const { data: checkedInVisitors = [], isLoading: loadingCheckedIn } = useQuery<CheckedInVisitor[]>({
+    queryKey: ["/api/visitors/checked-in"],
+    queryFn: async () => {
+      const response = await api.get("/visitors/checked-in");
+      return response.data;
+    },
     enabled: isAuthenticated,
     refetchInterval: 30000, // Refresh every 30 seconds
   });
@@ -45,10 +87,10 @@ export default function ReceptionInterface() {
   // Search visitors mutation
   const searchMutation = useMutation({
     mutationFn: async (query: string) => {
-      const response = await apiRequest("GET", `/api/visitors/search?q=${encodeURIComponent(query)}`);
-      return response.json();
+      const response = await api.get(`/visitors/search?q=${encodeURIComponent(query)}`);
+      return response.data;
     },
-    onSuccess: (visitors) => {
+    onSuccess: (visitors: Visitor[]) => {
       if (visitors.length > 0) {
         setSelectedVisitor(visitors[0]);
       } else {
@@ -59,7 +101,7 @@ export default function ReceptionInterface() {
         });
       }
     },
-    onError: (error) => {
+    onError: (error: any) => {
       if (isUnauthorizedError(error)) {
         toast({
           title: "Unauthorized",
@@ -73,7 +115,7 @@ export default function ReceptionInterface() {
       }
       toast({
         title: "Search Failed",
-        description: error.message,
+        description: error.response?.data?.message || "Failed to search visitors",
         variant: "destructive",
       });
     },
@@ -82,14 +124,14 @@ export default function ReceptionInterface() {
   // Badge lookup mutation
   const badgeLookupMutation = useMutation({
     mutationFn: async (badgeNumber: string) => {
-      const response = await apiRequest("GET", `/api/visitors/badge/${badgeNumber}`);
-      return response.json();
+      const response = await api.get(`/visitors/badge/${badgeNumber}`);
+      return response.data;
     },
-    onSuccess: (visitor) => {
+    onSuccess: (visitor: Visitor) => {
       setSelectedVisitor(visitor);
       setManualBadgeNumber("");
     },
-    onError: (error) => {
+    onError: (error: any) => {
       if (isUnauthorizedError(error)) {
         toast({
           title: "Unauthorized",
@@ -112,21 +154,19 @@ export default function ReceptionInterface() {
   // Check in/out mutation
   const checkInOutMutation = useMutation({
     mutationFn: async ({ visitRequestId, action }: { visitRequestId: number; action: 'check_in' | 'check_out' }) => {
-      const data = action === 'check_in' 
-        ? { checkedInAt: new Date().toISOString() }
-        : { checkedOutAt: new Date().toISOString() };
-      
-      await apiRequest("PATCH", `/api/visit-requests/${visitRequestId}`, data);
+      const response = await api.patch(`/visitors/${visitRequestId}/${action}`);
+      return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/visit-requests/checked-in"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/visitors/checked-in"] });
       setSelectedVisitor(null);
+      setSearchQuery("");
       toast({
         title: "Success",
         description: "Visitor status updated successfully.",
       });
     },
-    onError: (error) => {
+    onError: (error: any) => {
       if (isUnauthorizedError(error)) {
         toast({
           title: "Unauthorized",
@@ -140,7 +180,7 @@ export default function ReceptionInterface() {
       }
       toast({
         title: "Error",
-        description: error.message,
+        description: error.response?.data?.message || "Failed to update visitor status",
         variant: "destructive",
       });
     },
@@ -174,6 +214,16 @@ export default function ReceptionInterface() {
         action: 'check_out'
       });
     }
+  };
+
+  // Calculate duration for checked-in visitors
+  const calculateDuration = (checkedInAt: string): string => {
+    const timeIn = new Date(checkedInAt);
+    const now = new Date();
+    const duration = Math.floor((now.getTime() - timeIn.getTime()) / (1000 * 60)); // minutes
+    const hours = Math.floor(duration / 60);
+    const minutes = duration % 60;
+    return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
   };
 
   if (isLoading) {
@@ -325,7 +375,7 @@ export default function ReceptionInterface() {
                     <Button
                       className="flex-1 bg-green-600 hover:bg-green-700"
                       onClick={handleCheckIn}
-                      disabled={checkInOutMutation.isPending}
+                      disabled={checkInOutMutation.isPending || selectedVisitor.visitRequests[0]?.status === 'checked_in'}
                     >
                       <UserCheck className="mr-2 h-4 w-4" />
                       Check In
@@ -333,7 +383,7 @@ export default function ReceptionInterface() {
                     <Button
                       className="flex-1 bg-red-600 hover:bg-red-700"
                       onClick={handleCheckOut}
-                      disabled={checkInOutMutation.isPending}
+                      disabled={checkInOutMutation.isPending || selectedVisitor.visitRequests[0]?.status !== 'checked_in'}
                     >
                       <UserX className="mr-2 h-4 w-4" />
                       Check Out
@@ -379,42 +429,33 @@ export default function ReceptionInterface() {
                 </div>
               ) : (
                 <div className="space-y-4 max-h-96 overflow-y-auto">
-                  {checkedInVisitors.map((visit: any) => {
-                    const timeIn = new Date(visit.checkedInAt);
-                    const now = new Date();
-                    const duration = Math.floor((now.getTime() - timeIn.getTime()) / (1000 * 60)); // minutes
-                    const hours = Math.floor(duration / 60);
-                    const minutes = duration % 60;
-                    const durationText = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
-
-                    return (
-                      <div key={visit.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div className="flex items-center space-x-3">
-                          {visit.visitor.photoUrl && (
-                            <img
-                              src={visit.visitor.photoUrl}
-                              alt="Visitor"
-                              className="w-8 h-8 rounded-full object-cover"
-                            />
-                          )}
-                          <div>
-                            <p className="text-sm font-medium text-gray-900">
-                              {visit.visitor.firstName} {visit.visitor.lastName}
-                            </p>
-                            <p className="text-xs text-gray-500">In for {durationText}</p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-xs text-gray-500">
-                            Host: {visit.host.firstName} {visit.host.lastName}
+                  {checkedInVisitors.map((visit) => (
+                    <div key={visit.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                      <div className="flex items-center space-x-3">
+                        {visit.visitor.photoUrl && (
+                          <img
+                            src={visit.visitor.photoUrl}
+                            alt="Visitor"
+                            className="w-8 h-8 rounded-full object-cover"
+                          />
+                        )}
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">
+                            {visit.visitor.firstName} {visit.visitor.lastName}
                           </p>
-                          <p className="text-xs text-gray-400">
-                            Expected: {visit.duration}
-                          </p>
+                          <p className="text-xs text-gray-500">In for {calculateDuration(visit.checkedInAt)}</p>
                         </div>
                       </div>
-                    );
-                  })}
+                      <div className="text-right">
+                        <p className="text-xs text-gray-500">
+                          Host: {visit.host.firstName} {visit.host.lastName}
+                        </p>
+                        <p className="text-xs text-gray-400">
+                          Expected: {visit.duration}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
 
