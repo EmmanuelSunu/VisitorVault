@@ -225,7 +225,7 @@ class VisitorController extends Controller
                     'visitor' => [
                         'firstName' => $visitor->f_name,
                         'lastName' => $visitor->l_name,
-                        'photoUrl' => $visitor->pic ? url('storage/' . $visitor->pic) : null,
+                        'photoUrl' => $this->getImageUrl($visitor->pic),
                     ],
                     'host' => [
                         'firstName' => $visitor->h_name,
@@ -268,7 +268,7 @@ class VisitorController extends Controller
                     'lastName' => $visitor->l_name,
                     'company' => $visitor->company,
                     'badgeNumber' => $visitor->id_number,
-                    'photoUrl' => $visitor->pic ? url('storage/' . $visitor->pic) : null,
+                    'photoUrl' => $this->getImageUrl($visitor->pic),
                     'visitRequests' => [[
                         'id' => $visitor->id,
                         'status' => $visitor->check_out_time ? 'checked_out' : ($visitor->check_in_time ? 'checked_in' : ($visitor->status ?? 'pending')),
@@ -306,7 +306,7 @@ class VisitorController extends Controller
             'lastName' => $visitor->l_name,
             'company' => $visitor->company,
             'badgeNumber' => $visitor->id_number,
-            'photoUrl' => $visitor->pic ? url('storage/' . $visitor->pic) : null,
+            'photoUrl' => $this->getImageUrl($visitor->pic),
             'visitRequests' => [[
                 'id' => $visitor->id,
                 'status' => $visitor->check_out_time ? 'checked_out' : ($visitor->check_in_time ? 'checked_in' : ($visitor->status ?? 'pending')),
@@ -451,9 +451,20 @@ class VisitorController extends Controller
         // Generate unique filename
         $filename = $folder . '/' . Str::uuid() . '.jpg';
 
-        // Save image
-        Storage::put($filename, base64_decode($image));
+        // Save image to public storage
+        Storage::disk('public')->put($filename, base64_decode($image));
 
         return $filename;
+    }
+
+    /**
+     * Get the full URL for a stored image
+     */
+    private function getImageUrl($path)
+    {
+        if (!$path) {
+            return null;
+        }
+        return asset('storage/' . $path);
     }
 }
