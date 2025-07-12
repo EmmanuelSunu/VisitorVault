@@ -182,7 +182,7 @@ export default function HostDashboard() {
               <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
               <p className="text-gray-600">Manage visitor requests and today's schedule.</p>
             </div>
-            <Button variant="outline" onClick={() => api.post('/logout')} className="self-start md:self-auto">Logout</Button>
+            {/* <Button variant="outline" onClick={() => api.post('/logout')} className="self-start md:self-auto">Logout</Button> */}
           </div>
 
           {/* Stats Grid */}
