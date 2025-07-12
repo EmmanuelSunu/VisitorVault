@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { useEffect } from "react";
 import Header from "@/components/header";
@@ -13,6 +13,11 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import * as z from "zod";
 import { 
   Users, 
   Building, 
@@ -30,13 +35,65 @@ import {
   Camera,
   Mail
 } from "lucide-react";
+import { AxiosError } from "axios";
+
+// Form schema for user creation/editing
+const userFormSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  email: z.string().email("Invalid email address"),
+  password: z.string().min(8, "Password must be at least 8 characters").optional(),
+  role: z.enum(["admin", "host", "receptionist"], {
+    required_error: "Please select a role",
+  })
+});
+
+// Stats type definition
+interface SystemStats {
+  totalVisitors: number;
+  currentlyCheckedIn: number;
+  pendingApprovals: number;
+}
+
+interface ApiErrorResponse {
+  message: string;
+}
 
 export default function AdminPanel() {
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isLoading, api } = useAuth();
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<any>(null);
+
+  // Form setup
+  const form = useForm<z.infer<typeof userFormSchema>>({
+    resolver: zodResolver(userFormSchema),
+    defaultValues: {
+      name: "",
+      email: "",
+      role: "host",
+    },
+  });
+
+  // Reset form when dialog closes
+  useEffect(() => {
+    if (!isFormOpen && !editingUser) {
+      form.reset();
+    }
+  }, [isFormOpen, editingUser, form]);
+
+  // Set form values when editing user
+  useEffect(() => {
+    if (editingUser) {
+      form.reset({
+        name: editingUser.name,
+        email: editingUser.email,
+        role: editingUser.role
+      });
+    }
+  }, [editingUser, form]);
 
   // Redirect if not authenticated or not admin
   useEffect(() => {
@@ -63,44 +120,43 @@ export default function AdminPanel() {
   }, [isAuthenticated, isLoading, user, toast]);
 
   // Fetch statistics
-  const { data: stats } = useQuery({
+  const { data: stats = {} as SystemStats } = useQuery({
     queryKey: ["/api/stats"],
+    queryFn: async () => {
+      const response = await api.get("/stats");
+      return response.data;
+    },
     enabled: isAuthenticated && user?.role === 'admin',
   });
 
-  // Fetch all users
+  // Fetch all users with filters
   const { data: allUsers = [], isLoading: loadingUsers } = useQuery({
-    queryKey: ["/api/users", "all"],
+    queryKey: ["/api/users", roleFilter, statusFilter, searchQuery],
     queryFn: async () => {
-      const response = await apiRequest("GET", "/api/users?role=all");
-      return response.json();
+      const params = new URLSearchParams();
+      if (roleFilter !== "all") params.append("role", roleFilter);
+      if (statusFilter !== "all") params.append("status", statusFilter);
+      if (searchQuery) params.append("search", searchQuery);
+      
+      const response = await api.get(`/users?${params.toString()}`);
+      return response.data;
     },
     enabled: isAuthenticated && user?.role === 'admin',
   });
 
-  // Fetch recent activity
-  const { data: recentActivity = [] } = useQuery({
-    queryKey: ["/api/activity", 20],
-    queryFn: async () => {
-      const response = await apiRequest("GET", "/api/activity?limit=20");
-      return response.json();
-    },
-    enabled: isAuthenticated && user?.role === 'admin',
-  });
-
-  // User status update mutation
-  const updateUserStatusMutation = useMutation({
-    mutationFn: async ({ userId, isActive }: { userId: string; isActive: boolean }) => {
-      await apiRequest("PATCH", `/api/users/${userId}/status`, { isActive });
+  // Create user mutation
+  const createUserMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof userFormSchema>) => {
+      const response = await api.post("/users", data);
+      return response.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
-      toast({
-        title: "Success",
-        description: "User status updated successfully.",
-      });
+      toast({ title: "Success", description: "User created successfully" });
+      setIsFormOpen(false);
+      form.reset();
     },
-    onError: (error) => {
+    onError: (error: AxiosError<ApiErrorResponse>) => {
       if (isUnauthorizedError(error)) {
         toast({
           title: "Unauthorized",
@@ -114,28 +170,136 @@ export default function AdminPanel() {
       }
       toast({
         title: "Error",
-        description: error.message,
+        description: error.response?.data?.message || "Failed to create user",
         variant: "destructive",
       });
     },
   });
 
-  const filteredUsers = allUsers.filter((user: any) => {
-    const matchesSearch = searchQuery === "" || 
-      user.firstName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.lastName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.email?.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    const matchesRole = roleFilter === "all" || user.role === roleFilter;
-    const matchesStatus = statusFilter === "all" || 
-      (statusFilter === "active" && user.isActive) ||
-      (statusFilter === "inactive" && !user.isActive);
-    
-    return matchesSearch && matchesRole && matchesStatus;
+  // Update user mutation
+  const updateUserMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: z.infer<typeof userFormSchema> }) => {
+      const response = await api.put(`/users/${id}`, data);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      toast({ title: "Success", description: "User updated successfully" });
+      setEditingUser(null);
+      setIsFormOpen(false);
+      form.reset();
+    },
+    onError: (error: AxiosError<ApiErrorResponse>) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to update user",
+        variant: "destructive",
+      });
+    },
   });
 
-  const handleToggleUserStatus = (userId: string, currentStatus: boolean) => {
-    updateUserStatusMutation.mutate({ userId, isActive: !currentStatus });
+  // Delete user mutation
+  const deleteUserMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await api.delete(`/users/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      toast({ title: "Success", description: "User deleted successfully" });
+    },
+    onError: (error: AxiosError<ApiErrorResponse>) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to delete user",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Toggle user status mutation
+  const toggleUserStatusMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await api.patch(`/users/${id}/toggle-status`);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      toast({ title: "Success", description: "User status updated successfully" });
+    },
+    onError: (error: AxiosError<ApiErrorResponse>) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to update user status",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const onSubmit = async (data: z.infer<typeof userFormSchema>) => {
+    if (editingUser) {
+      await updateUserMutation.mutateAsync({ id: editingUser.id, data });
+    } else {
+      await createUserMutation.mutateAsync(data);
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    if (window.confirm("Are you sure you want to delete this user?")) {
+      await deleteUserMutation.mutateAsync(userId);
+    }
+  };
+
+  const handleToggleStatus = async (userId: string) => {
+    await toggleUserStatusMutation.mutateAsync(userId);
+  };
+
+  const handleEditUser = (user: any) => {
+    setEditingUser(user);
+    setIsFormOpen(true);
+    form.reset({
+      name: user.name,
+      email: user.email,
+      role: user.role
+    });
+  };
+
+  const handleCloseForm = () => {
+    setIsFormOpen(false);
+    setEditingUser(null);
+    form.reset();
   };
 
   if (isLoading) {
@@ -211,7 +375,7 @@ export default function AdminPanel() {
                     <div className="ml-4">
                       <p className="text-sm font-medium text-gray-500">Total Users</p>
                       <p className="text-2xl font-semibold text-gray-900">{allUsers.length}</p>
-                      <p className="text-xs text-green-600">+{allUsers.filter((u: any) => u.isActive).length} active</p>
+                      <p className="text-xs text-green-600">+{allUsers.filter((u: any) => u.is_active).length} active</p>
                     </div>
                   </div>
                 </CardContent>
@@ -315,26 +479,8 @@ export default function AdminPanel() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4 max-h-64 overflow-y-auto">
-                    {recentActivity.length === 0 ? (
-                      <p className="text-gray-600 text-center py-4">No recent activity</p>
-                    ) : (
-                      recentActivity.map((activity: any) => (
-                        <div key={activity.id} className="flex items-start space-x-3">
-                          <div className="flex-shrink-0">
-                            {activity.action === 'check_in' && <CheckCircle className="h-4 w-4 text-green-500" />}
-                            {activity.action === 'check_out' && <XCircle className="h-4 w-4 text-gray-500" />}
-                            {activity.action === 'approved' && <CheckCircle className="h-4 w-4 text-blue-500" />}
-                            {activity.action === 'rejected' && <XCircle className="h-4 w-4 text-red-500" />}
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-900">{activity.notes || activity.action}</p>
-                            <p className="text-xs text-gray-500">
-                              {new Date(activity.timestamp).toLocaleString()}
-                            </p>
-                          </div>
-                        </div>
-                      ))
-                    )}
+                    {/* Recent activity data is not fetched in this component, so this will be empty */}
+                    <p className="text-gray-600 text-center py-4">No recent activity</p>
                   </div>
                 </CardContent>
               </Card>
@@ -347,10 +493,137 @@ export default function AdminPanel() {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle>User Management</CardTitle>
-                  <Button>
-                    <UserPlus className="mr-2 h-4 w-4" />
-                    Add User
-                  </Button>
+                  <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
+                    <DialogTrigger asChild>
+                      <Button onClick={() => {
+                        setEditingUser(null);
+                        form.reset({
+                          name: "",
+                          email: "",
+                          role: "host",
+                        });
+                        setIsFormOpen(true);
+                      }}>
+                        <UserPlus className="mr-2 h-4 w-4" />
+                        Add User
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>{editingUser ? "Edit User" : "Add New User"}</DialogTitle>
+                      </DialogHeader>
+                      <Form {...form}>
+                        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                          <FormField
+                            control={form.control}
+                            name="name"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Name</FormLabel>
+                                <FormControl>
+                                  <Input {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={form.control}
+                            name="email"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Email</FormLabel>
+                                <FormControl>
+                                  <Input type="email" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          {!editingUser && (
+                            <FormField
+                              control={form.control}
+                              name="password"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Password</FormLabel>
+                                  <FormControl>
+                                    <Input type="password" {...field} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          )}
+                          <FormField
+                            control={form.control}
+                            name="role"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Role</FormLabel>
+                                <Select
+                                  value={field.value}
+                                  onValueChange={field.onChange}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select role" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="admin">Admin</SelectItem>
+                                    <SelectItem value="host">Host</SelectItem>
+                                    <SelectItem value="receptionist">Receptionist</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          {/* <FormField
+                            control={form.control}
+                            name="department"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Department</FormLabel>
+                                <FormControl>
+                                  <Input {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={form.control}
+                            name="is_active"
+                            render={({ field }) => (
+                              <FormItem className="flex items-center space-x-2">
+                                <FormControl>
+                                  <input
+                                    type="checkbox"
+                                    checked={field.value}
+                                    onChange={field.onChange}
+                                  />
+                                </FormControl>
+                                <FormLabel>Active</FormLabel>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          /> */}
+                          <div className="flex justify-end space-x-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={handleCloseForm}
+                            >
+                              Cancel
+                            </Button>
+                            <Button type="submit">
+                              {editingUser ? "Update" : "Create"} User
+                            </Button>
+                          </div>
+                        </form>
+                      </Form>
+                    </DialogContent>
+                  </Dialog>
                 </div>
               </CardHeader>
               
@@ -379,7 +652,7 @@ export default function AdminPanel() {
                         <SelectItem value="all">All Roles</SelectItem>
                         <SelectItem value="admin">Admin</SelectItem>
                         <SelectItem value="host">Host</SelectItem>
-                        <SelectItem value="reception">Reception</SelectItem>
+                        <SelectItem value="receptionist">Receptionist</SelectItem>
                       </SelectContent>
                     </Select>
                     <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -413,12 +686,12 @@ export default function AdminPanel() {
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Role
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          {/* <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Department
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          </th> */}
+                          {/* <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Status
-                          </th>
+                          </th> */}
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Created
                           </th>
@@ -428,7 +701,7 @@ export default function AdminPanel() {
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
-                        {filteredUsers.map((user: any) => (
+                        {allUsers.map((user: any) => (
                           <tr key={user.id} className="hover:bg-gray-50">
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div className="flex items-center">
@@ -441,7 +714,7 @@ export default function AdminPanel() {
                                 )}
                                 <div className="ml-3">
                                   <div className="text-sm font-medium text-gray-900">
-                                    {user.firstName} {user.lastName}
+                                    {user.name}
                                   </div>
                                   <div className="text-sm text-gray-500">{user.email}</div>
                                 </div>
@@ -452,32 +725,42 @@ export default function AdminPanel() {
                                 {user.role}
                               </Badge>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {/* <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                               {user.department || 'N/A'}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <Badge className={user.isActive ? 'status-approved' : 'status-rejected'}>
-                                {user.isActive ? 'Active' : 'Inactive'}
+                            </td> */}
+                            {/* <td className="px-6 py-4 whitespace-nowrap">
+                              <Badge className={user.is_active ? 'status-approved' : 'status-rejected'}>
+                                {user.is_active ? 'Active' : 'Inactive'}
                               </Badge>
-                            </td>
+                            </td> */}
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}
+                              {user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
-                              <Button variant="ghost" size="sm">
-                                <Edit className="h-4 w-4" />
-                              </Button>
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => handleToggleUserStatus(user.id, user.isActive)}
-                                disabled={updateUserStatusMutation.isPending}
+                                onClick={() => handleEditUser(user)}
                               >
-                                {user.isActive ? (
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              {/* <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleToggleStatus(user.id)}
+                              >
+                                {user.is_active ? (
                                   <XCircle className="h-4 w-4 text-red-500" />
                                 ) : (
                                   <CheckCircle className="h-4 w-4 text-green-500" />
                                 )}
+                              </Button> */}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDeleteUser(user.id)}
+                              >
+                                <Trash2 className="h-4 w-4 text-red-500" />
                               </Button>
                             </td>
                           </tr>
@@ -488,13 +771,13 @@ export default function AdminPanel() {
                 )}
 
                 {/* Pagination */}
-                {filteredUsers.length > 0 && (
+                {allUsers.length > 0 && (
                   <div className="px-6 py-4 border-t border-gray-200">
                     <div className="flex items-center justify-between">
                       <div className="text-sm text-gray-700">
                         Showing <span className="font-medium">1</span> to{" "}
-                        <span className="font-medium">{filteredUsers.length}</span> of{" "}
-                        <span className="font-medium">{filteredUsers.length}</span> results
+                        <span className="font-medium">{allUsers.length}</span> of{" "}
+                        <span className="font-medium">{allUsers.length}</span> results
                       </div>
                       <div className="flex items-center space-x-2">
                         <Button variant="outline" size="sm" disabled>
