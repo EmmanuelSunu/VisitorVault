@@ -153,7 +153,7 @@ export default function ReceptionInterface() {
 
   // Check in/out mutation
   const checkInOutMutation = useMutation({
-    mutationFn: async ({ visitRequestId, action }: { visitRequestId: number; action: 'check_in' | 'check_out' }) => {
+    mutationFn: async ({ visitRequestId, action }: { visitRequestId: number; action: 'check-in' | 'check-out' }) => {
       const response = await api.patch(`/visitors/${visitRequestId}/${action}`);
       return response.data;
     },
@@ -202,7 +202,7 @@ export default function ReceptionInterface() {
     if (selectedVisitor?.visitRequests?.[0]?.id) {
       checkInOutMutation.mutate({
         visitRequestId: selectedVisitor.visitRequests[0].id,
-        action: 'check_in'
+        action: 'check-in'
       });
     }
   };
@@ -211,7 +211,7 @@ export default function ReceptionInterface() {
     if (selectedVisitor?.visitRequests?.[0]?.id) {
       checkInOutMutation.mutate({
         visitRequestId: selectedVisitor.visitRequests[0].id,
-        action: 'check_out'
+        action: 'check-out'
       });
     }
   };
