@@ -208,6 +208,79 @@ class VisitorController extends Controller
         ]);
     }
 
+    /**
+     * Get recent visitor activity logs
+     */
+    public function activityLogs(Request $request)
+    {
+        $query = Visitor::query()
+            ->with('host')
+            ->where(function ($q) {
+                $q->whereNotNull('created_at') // New registrations
+                    ->orWhereNotNull('check_in_time') // Check-ins
+                    ->orWhereNotNull('check_out_time') // Check-outs
+                    ->orWhereIn('status', ['approved', 'rejected']); // Status changes
+            });
+
+        // If user is a host, only show their visitors' activities
+        if ($request->user()->role === 'host') {
+            $query->where('user_id', $request->user()->id);
+        }
+
+        $activities = $query->latest()->limit(10)->get()->map(function ($visitor) {
+            $activities = [];
+
+            // Registration
+            $activities[] = [
+                'type' => 'registration',
+                'visitor_name' => $visitor->f_name . ' ' . $visitor->l_name,
+                'host_name' => $visitor->h_name,
+                'timestamp' => $visitor->created_at,
+                'description' => "New visitor registration"
+            ];
+
+            // Status change (approval/rejection)
+            if (in_array($visitor->status, ['approved', 'rejected'])) {
+                $activities[] = [
+                    'type' => 'status_change',
+                    'visitor_name' => $visitor->f_name . ' ' . $visitor->l_name,
+                    'host_name' => $visitor->h_name,
+                    'timestamp' => $visitor->updated_at,
+                    'description' => "Visit " . $visitor->status
+                ];
+            }
+
+            // Check-in
+            if ($visitor->check_in_time) {
+                $activities[] = [
+                    'type' => 'check_in',
+                    'visitor_name' => $visitor->f_name . ' ' . $visitor->l_name,
+                    'host_name' => $visitor->h_name,
+                    'timestamp' => $visitor->check_in_time,
+                    'description' => "Visitor checked in"
+                ];
+            }
+
+            // Check-out
+            if ($visitor->check_out_time) {
+                $activities[] = [
+                    'type' => 'check_out',
+                    'visitor_name' => $visitor->f_name . ' ' . $visitor->l_name,
+                    'host_name' => $visitor->h_name,
+                    'timestamp' => $visitor->check_out_time,
+                    'description' => "Visitor checked out"
+                ];
+            }
+
+            return $activities;
+        })->flatten(1)
+            ->sortByDesc('timestamp')
+            ->values()
+            ->take(10);
+
+        return response()->json($activities);
+    }
+
     private function saveBase64Image($base64Image, $folder)
     {
         // Remove data URI scheme header

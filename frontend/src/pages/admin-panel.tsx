@@ -49,9 +49,22 @@ const userFormSchema = z.object({
 
 // Stats type definition
 interface SystemStats {
-  totalVisitors: number;
-  currentlyCheckedIn: number;
-  pendingApprovals: number;
+  pending_approvals_count: number;
+  todays_visits_count: number;
+  currently_checked_in: number;
+  weekly_total: number;
+  lists?: {
+    todays_visits: any[];
+    pending_approvals: any[];
+  };
+}
+
+interface ActivityLog {
+  type: 'registration' | 'status_change' | 'check_in' | 'check_out';
+  visitor_name: string;
+  host_name: string;
+  timestamp: string;
+  description: string;
 }
 
 interface ApiErrorResponse {
@@ -120,14 +133,21 @@ export default function AdminPanel() {
   }, [isAuthenticated, isLoading, user, toast]);
 
   // Fetch statistics
-  const { data: stats = {} as SystemStats } = useQuery({
-    queryKey: ["/api/stats"],
+  const { data: dashboardData } = useQuery({
+    queryKey: ["/api/dashboard"],
     queryFn: async () => {
-      const response = await api.get("/stats");
+      const response = await api.get("/dashboard");
       return response.data;
     },
     enabled: isAuthenticated && user?.role === 'admin',
   });
+
+  const stats: SystemStats = dashboardData?.statistics || {
+    pending_approvals_count: 0,
+    todays_visits_count: 0,
+    currently_checked_in: 0,
+    weekly_total: 0,
+  };
 
   // Fetch all users with filters
   const { data: allUsers = [], isLoading: loadingUsers } = useQuery({
@@ -139,6 +159,16 @@ export default function AdminPanel() {
       if (searchQuery) params.append("search", searchQuery);
       
       const response = await api.get(`/users?${params.toString()}`);
+      return response.data;
+    },
+    enabled: isAuthenticated && user?.role === 'admin',
+  });
+
+  // Fetch activity logs
+  const { data: activityLogs = [] } = useQuery<ActivityLog[]>({
+    queryKey: ["/api/activity-logs"],
+    queryFn: async () => {
+      const response = await api.get("/activity-logs");
       return response.data;
     },
     enabled: isAuthenticated && user?.role === 'admin',
@@ -391,8 +421,8 @@ export default function AdminPanel() {
                     </div>
                     <div className="ml-4">
                       <p className="text-sm font-medium text-gray-500">Total Visitors</p>
-                      <p className="text-2xl font-semibold text-gray-900">{stats?.totalVisitors || 0}</p>
-                      <p className="text-xs text-green-600">All time</p>
+                      <p className="text-2xl font-semibold text-gray-900">{stats?.weekly_total || 0}</p>
+                      <p className="text-xs text-green-600">This week</p>
                     </div>
                   </div>
                 </CardContent>
@@ -407,9 +437,9 @@ export default function AdminPanel() {
                       </div>
                     </div>
                     <div className="ml-4">
-                      <p className="text-sm font-medium text-gray-500">Currently Checked In</p>
-                      <p className="text-2xl font-semibold text-gray-900">{stats?.currentlyCheckedIn || 0}</p>
-                      <p className="text-xs text-gray-600">Right now</p>
+                      <p className="text-sm font-medium text-gray-500">Today's Visitors</p>
+                      <p className="text-2xl font-semibold text-gray-900">{stats?.todays_visits_count || 0}</p>
+                      <p className="text-xs text-gray-600">Today</p>
                     </div>
                   </div>
                 </CardContent>
@@ -425,7 +455,7 @@ export default function AdminPanel() {
                     </div>
                     <div className="ml-4">
                       <p className="text-sm font-medium text-gray-500">Pending Approvals</p>
-                      <p className="text-2xl font-semibold text-gray-900">{stats?.pendingApprovals || 0}</p>
+                      <p className="text-2xl font-semibold text-gray-900">{stats?.pending_approvals_count || 0}</p>
                       <p className="text-xs text-orange-600">Needs attention</p>
                     </div>
                   </div>
@@ -479,8 +509,41 @@ export default function AdminPanel() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4 max-h-64 overflow-y-auto">
-                    {/* Recent activity data is not fetched in this component, so this will be empty */}
-                    <p className="text-gray-600 text-center py-4">No recent activity</p>
+                    {activityLogs.length === 0 ? (
+                      <p className="text-gray-600 text-center py-4">No recent activity</p>
+                    ) : (
+                      activityLogs.map((activity, index) => (
+                        <div key={index} className="flex items-center space-x-4">
+                          <div className="flex-shrink-0">
+                            {activity.type === 'registration' && (
+                              <UserPlus className="h-5 w-5 text-blue-500" />
+                            )}
+                            {activity.type === 'status_change' && (
+                              <AlertTriangle className="h-5 w-5 text-orange-500" />
+                            )}
+                            {activity.type === 'check_in' && (
+                              <CheckCircle className="h-5 w-5 text-green-500" />
+                            )}
+                            {activity.type === 'check_out' && (
+                              <XCircle className="h-5 w-5 text-red-500" />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900">
+                              {activity.visitor_name}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {activity.description} • Host: {activity.host_name}
+                            </p>
+                          </div>
+                          <div className="flex-shrink-0">
+                            <p className="text-xs text-gray-500">
+                              {new Date(activity.timestamp).toLocaleString()}
+                            </p>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -655,7 +718,7 @@ export default function AdminPanel() {
                         <SelectItem value="receptionist">Receptionist</SelectItem>
                       </SelectContent>
                     </Select>
-                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    {/* <Select value={statusFilter} onValueChange={setStatusFilter}>
                       <SelectTrigger className="w-[120px]">
                         <SelectValue placeholder="All Status" />
                       </SelectTrigger>
@@ -664,7 +727,7 @@ export default function AdminPanel() {
                         <SelectItem value="active">Active</SelectItem>
                         <SelectItem value="inactive">Inactive</SelectItem>
                       </SelectContent>
-                    </Select>
+                    </Select> */}
                   </div>
                 </div>
               </div>

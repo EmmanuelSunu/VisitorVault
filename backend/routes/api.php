@@ -39,6 +39,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Dashboard route
     Route::get('/dashboard', [VisitorController::class, 'dashboard']);
+    Route::get('/activity-logs', [VisitorController::class, 'activityLogs']);
 
     // Protected visitor routes
     Route::get('/visitors', [VisitorController::class, 'index']);
