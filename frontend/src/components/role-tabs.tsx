@@ -24,7 +24,7 @@ export default function RoleTabs() {
       label: "Reception",
       icon: QrCode,
       path: "/reception",
-      roles: ["reception", "admin"],
+      roles: ["reception", "admin", "host"],
     },
     {
       id: "admin",

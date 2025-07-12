@@ -185,14 +185,14 @@ export default function AdminPanel() {
                 <Users className="h-4 w-4" />
                 <span>User Management</span>
               </TabsTrigger>
-              <TabsTrigger value="locations" className="flex items-center space-x-2">
+              {/* <TabsTrigger value="locations" className="flex items-center space-x-2">
                 <Building className="h-4 w-4" />
                 <span>Locations</span>
-              </TabsTrigger>
-              <TabsTrigger value="settings" className="flex items-center space-x-2">
+              </TabsTrigger> */}
+              {/* <TabsTrigger value="settings" className="flex items-center space-x-2">
                 <Settings className="h-4 w-4" />
                 <span>Settings</span>
-              </TabsTrigger>
+              </TabsTrigger> */}
             </TabsList>
           </div>
 

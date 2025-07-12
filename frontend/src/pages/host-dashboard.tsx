@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Clock, Calendar, Users, BarChart3, Check, X, Eye, User, Camera, Mail } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import RoleTabs from "@/components/role-tabs";
 
 interface VisitorRequest {
   id: number;
@@ -174,6 +175,7 @@ export default function HostDashboard() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
+      <RoleTabs />
       <main className="container mx-auto px-4 py-8">
         <div className="space-y-8">
           {/* Dashboard Header */}
