@@ -53,6 +53,7 @@ export default function HostDashboard() {
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<{url: string, type: string} | null>(null);
+  const media_URL = import.meta.env.VITE_MEDIA_URL||'http://127.0.0.1:8000'
 
   // Fetch dashboard data
   const { data: dashboardData, isLoading: dashboardLoading } = useQuery<DashboardData>({
@@ -425,10 +426,10 @@ export default function HostDashboard() {
                     <div className="relative group">
                       {selectedRequest.pic ? (
                         <img 
-                          src={`/storage/${selectedRequest.pic}`}
+                          src={`${media_URL}/storage/${selectedRequest.pic}`}
                           alt="Visitor Photo" 
                           className="w-full h-32 sm:h-48 object-cover rounded-lg border cursor-pointer hover:opacity-90 transition-opacity"
-                          onClick={() => handleViewPhoto(`/storage/${selectedRequest.pic}`, 'Visitor Photo')}
+                          onClick={() => handleViewPhoto(`${media_URL}/storage/${selectedRequest.pic}`, 'Visitor Photo')}
                         />
                       ) : (
                         <div className="w-full h-32 sm:h-48 flex items-center justify-center bg-gray-100 rounded-lg border text-gray-400">No photo</div>
@@ -440,10 +441,10 @@ export default function HostDashboard() {
                     <div className="relative group">
                       {selectedRequest.id_pic ? (
                         <img 
-                          src={`/storage/${selectedRequest.id_pic}`}
+                          src={`${media_URL}/storage/${selectedRequest.id_pic}`}
                           alt="ID Document" 
                           className="w-full h-32 sm:h-48 object-cover rounded-lg border cursor-pointer hover:opacity-90 transition-opacity"
-                          onClick={() => handleViewPhoto(`/storage/${selectedRequest.id_pic}`, 'ID Document')}
+                          onClick={() => handleViewPhoto(`${media_URL}/storage/${selectedRequest.id_pic}`, 'ID Document')}
                         />
                       ) : (
                         <div className="w-full h-32 sm:h-48 flex items-center justify-center bg-gray-100 rounded-lg border text-gray-400">No ID photo</div>
