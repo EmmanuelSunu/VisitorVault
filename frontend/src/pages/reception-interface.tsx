@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { QrCode, Search, UserCheck, UserX, AlertTriangle, FileOutput, Camera, Building } from "lucide-react";
+import { QrCode, Search, UserCheck, UserX, AlertTriangle, FileOutput, Camera, Building, Check, X } from "lucide-react";
 
 interface Visitor {
   id: number;
@@ -20,6 +20,7 @@ interface Visitor {
   company: string;
   badgeNumber: string;
   photoUrl?: string;
+  status: 'pending' | 'approved' | 'rejected';
   visitRequests: VisitRequest[];
 }
 
@@ -75,9 +76,9 @@ export default function ReceptionInterface() {
 
   // Fetch currently checked in visitors
   const { data: checkedInVisitors = [], isLoading: loadingCheckedIn } = useQuery<CheckedInVisitor[]>({
-    queryKey: ["/api/visitors/checked-in"],
+    queryKey: ["/api/visits/checked-in"],
     queryFn: async () => {
-      const response = await api.get("/visitors/checked-in");
+      const response = await api.get("/visits/checked-in");
       return response.data;
     },
     enabled: isAuthenticated,
@@ -153,12 +154,48 @@ export default function ReceptionInterface() {
 
   // Check in/out mutation
   const checkInOutMutation = useMutation({
-    mutationFn: async ({ visitRequestId, action }: { visitRequestId: number; action: 'check-in' | 'check-out' }) => {
-      const response = await api.patch(`/visitors/${visitRequestId}/${action}`);
+    mutationFn: async ({ visitorId, action }: { visitorId: number; action: 'check-in' | 'check-out' }) => {
+      const endpoint = action === 'check-in' ? '/visits/check-in-visitor' : '/visits/check-out-visitor';
+      const response = await api.post(endpoint, { visitor_id: visitorId });
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/visitors/checked-in"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/visits/checked-in"] });
+      setSelectedVisitor(null);
+      setSearchQuery("");
+      toast({
+        title: "Success",
+        description: "Visitor status updated successfully.",
+      });
+    },
+    onError: (error: any) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to update visitor status",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Approve/unapprove visitor mutation
+  const approveVisitorMutation = useMutation({
+    mutationFn: async ({ visitorId, status, notes }: { visitorId: number; status: string; notes?: string }) => {
+      const response = await api.patch(`/visitor/${visitorId}`, { status, notes });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/visits/checked-in"] });
       setSelectedVisitor(null);
       setSearchQuery("");
       toast({
@@ -199,20 +236,42 @@ export default function ReceptionInterface() {
   };
 
   const handleCheckIn = () => {
-    if (selectedVisitor?.visitRequests?.[0]?.id) {
+    if (selectedVisitor?.id) {
       checkInOutMutation.mutate({
-        visitRequestId: selectedVisitor.visitRequests[0].id,
+        visitorId: selectedVisitor.id,
         action: 'check-in'
       });
     }
   };
 
   const handleCheckOut = () => {
-    if (selectedVisitor?.visitRequests?.[0]?.id) {
+    if (selectedVisitor?.id) {
       checkInOutMutation.mutate({
-        visitRequestId: selectedVisitor.visitRequests[0].id,
+        visitorId: selectedVisitor.id,
         action: 'check-out'
       });
+    }
+  };
+
+  const handleApprove = () => {
+    if (selectedVisitor?.id) {
+      approveVisitorMutation.mutate({
+        visitorId: selectedVisitor.id,
+        status: 'approved'
+      });
+    }
+  };
+
+  const handleDisapprove = () => {
+    if (selectedVisitor?.id && selectedVisitor.status === 'approved') {
+      const reason = prompt('Please provide a reason for disapproval:');
+      if (reason) {
+        approveVisitorMutation.mutate({
+          visitorId: selectedVisitor.id,
+          status: 'rejected',
+          notes: reason
+        });
+      }
     }
   };
 
@@ -245,7 +304,7 @@ export default function ReceptionInterface() {
     <div className="min-h-screen bg-gray-100">
       <Header />
       <RoleTabs />
-      
+
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         {/* Status Banner */}
         <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
@@ -262,34 +321,34 @@ export default function ReceptionInterface() {
         </div>
 
         {/* Main Reception Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
           {/* QR Scanner Section */}
-          <Card>
+          {/* <Card>
             <CardHeader>
               <CardTitle>QR Code Scanner</CardTitle>
             </CardHeader>
-            <CardContent>
-              {/* QR Scanner Placeholder */}
-              <div className="bg-gray-900 rounded-lg mb-4 aspect-video flex items-center justify-center relative">
+            <CardContent> */}
+          {/* QR Scanner Placeholder */}
+          {/* <div className="bg-gray-900 rounded-lg mb-4 aspect-video flex items-center justify-center relative">
                 <Camera className="h-16 w-16 text-white" />
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="w-32 h-32 border-2 border-white rounded-lg opacity-50"></div>
                 </div>
-              </div>
-              
-              {/* Scanner Controls */}
-              <div className="space-y-4">
+              </div> */}
+
+          {/* Scanner Controls */}
+          {/* <div className="space-y-4">
                 <div className="text-center">
                   <p className="text-sm text-gray-600 mb-4">Scan visitor QR code to check in/out</p>
                   <Button className="w-full">
                     <QrCode className="mr-2 h-4 w-4" />
                     Start Scanner
                   </Button>
-                </div>
-                
-                {/* Manual Entry */}
-                <div className="border-t pt-4">
+                </div> */}
+
+          {/* Manual Entry */}
+          {/* <div className="border-t pt-4">
                   <p className="text-sm font-medium text-gray-700 mb-2">Manual Entry</p>
                   <div className="flex space-x-2">
                     <Input
@@ -298,7 +357,7 @@ export default function ReceptionInterface() {
                       onChange={(e) => setManualBadgeNumber(e.target.value)}
                       onKeyPress={(e) => e.key === 'Enter' && handleBadgeLookup()}
                     />
-                    <Button 
+                    <Button
                       variant="secondary"
                       onClick={handleBadgeLookup}
                       disabled={badgeLookupMutation.isPending}
@@ -309,7 +368,7 @@ export default function ReceptionInterface() {
                 </div>
               </div>
             </CardContent>
-          </Card>
+          </Card> */}
 
           {/* Check-in/out Panel */}
           <Card>
@@ -331,8 +390,8 @@ export default function ReceptionInterface() {
                     <Search className="h-4 w-4 text-gray-400" />
                   </div>
                 </div>
-                <Button 
-                  className="w-full mt-2" 
+                <Button
+                  className="w-full mt-2"
                   onClick={handleSearch}
                   disabled={searchMutation.isPending}
                 >
@@ -357,37 +416,73 @@ export default function ReceptionInterface() {
                       </h3>
                       <p className="text-sm text-gray-500">{selectedVisitor.company}</p>
                       <p className="text-sm text-gray-500">Badge: #{selectedVisitor.badgeNumber}</p>
-                      {selectedVisitor.visitRequests?.[0] && (
-                        <div className="flex items-center space-x-2 mt-2">
-                          <Badge className={`status-${selectedVisitor.visitRequests[0].status}`}>
-                            {selectedVisitor.visitRequests[0].status}
-                          </Badge>
-                          <span className="text-xs text-gray-500">
-                            Host: {selectedVisitor.visitRequests[0].host?.firstName} {selectedVisitor.visitRequests[0].host?.lastName}
-                          </span>
-                        </div>
-                      )}
+                      <div className="flex items-center space-x-2 mt-2">
+                        <Badge className={`status-${selectedVisitor.status}`}>
+                          {selectedVisitor.status}
+                        </Badge>
+                        {/* {selectedVisitor.visitRequests?.[0] && (
+                          <>
+                            <Badge className={`status-${selectedVisitor.visitRequests[0].status}`}>
+                              {selectedVisitor.visitRequests[0].status}
+                            </Badge>
+                            <span className="text-xs text-gray-500">
+                              Host: {selectedVisitor.visitRequests[0].host?.firstName} {selectedVisitor.visitRequests[0].host?.lastName}
+                            </span>
+                          </>
+                        )} */}
+                      </div>
                     </div>
                   </div>
-                  
+
                   {/* Action Buttons */}
-                  <div className="flex space-x-3 mt-4">
-                    <Button
-                      className="flex-1 bg-green-600 hover:bg-green-700"
-                      onClick={handleCheckIn}
-                      disabled={checkInOutMutation.isPending || selectedVisitor.visitRequests[0]?.status === 'checked_in'}
-                    >
-                      <UserCheck className="mr-2 h-4 w-4" />
-                      Check In
-                    </Button>
-                    <Button
-                      className="flex-1 bg-red-600 hover:bg-red-700"
-                      onClick={handleCheckOut}
-                      disabled={checkInOutMutation.isPending || selectedVisitor.visitRequests[0]?.status !== 'checked_in'}
-                    >
-                      <UserX className="mr-2 h-4 w-4" />
-                      Check Out
-                    </Button>
+                  <div className="space-y-3 mt-4">
+                    {/* Check-in/out buttons */}
+                    {selectedVisitor.status === 'approved' ? (
+                      <div className="flex space-x-3"  >
+                        <Button
+                          className="flex-1 bg-green-600 hover:bg-green-700"
+                          onClick={handleCheckIn}
+                          disabled={checkInOutMutation.isPending || selectedVisitor.visitRequests[0]?.status === 'checked_in' || selectedVisitor.status !== 'approved'}
+                        >
+                          <UserCheck className="mr-2 h-4 w-4" />
+                          Check In
+                        </Button>
+                        <Button
+                          className="flex-1 bg-red-600 hover:bg-red-700"
+                          onClick={handleCheckOut}
+                          disabled={checkInOutMutation.isPending || selectedVisitor.visitRequests[0]?.status !== 'checked_in'}
+                        >
+                          <UserX className="mr-2 h-4 w-4" />
+                          Check Out
+                        </Button>
+                      </div>
+                    ) : (
+                      <span>
+
+                      </span>
+                    )}
+
+
+                    {/* Approve/unapprove buttons */}
+                    <div className="flex space-x-3">
+                      <Button
+                        className="flex-1 bg-blue-600 hover:bg-blue-700"
+                        onClick={handleApprove}
+                        disabled={approveVisitorMutation.isPending || selectedVisitor.status === 'approved'}
+                      >
+                        <Check className="mr-2 h-4 w-4" />
+                        Approve
+                      </Button>
+                      <Button
+                        className="flex-1 bg-yellow-600 hover:bg-yellow-700"
+                        onClick={handleDisapprove}
+                        disabled={approveVisitorMutation.isPending || selectedVisitor.status !== 'approved'}
+                        title={selectedVisitor.status !== 'approved' ? 'Only approved visitors can be disapproved' : 'Disapprove this visitor'}
+                      >
+                        <X className="mr-2 h-4 w-4" />
+                        Disapprove
+                      </Button>
+                    </div>
                   </div>
                 </div>
               ) : (

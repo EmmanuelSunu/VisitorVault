@@ -10,7 +10,7 @@ import { Clock, Calendar, Users, BarChart3, Check, X, Eye, User, Camera, Mail } 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import RoleTabs from "@/components/role-tabs";
 
-interface VisitorRequest {
+interface Visitor {
   id: number;
   f_name: string;
   l_name: string;
@@ -20,8 +20,6 @@ interface VisitorRequest {
   purpose: string;
   visit_date: string;
   status: 'pending' | 'approved' | 'rejected';
-  check_in_time?: string;
-  check_out_time?: string;
   pic?: string;
   id_pic?: string;
   id_type: string;
@@ -30,6 +28,34 @@ interface VisitorRequest {
   h_email: string;
   h_phone: string;
   notes?: string;
+  user_id: number;
+  created_at: string;
+  updated_at: string;
+}
+
+interface Host {
+  id: number;
+  name: string;
+  email: string;
+  email_verified_at: string;
+  role: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface Visit {
+  id: number;
+  visitor_id: number;
+  user_id: number;
+  visit_date: string;
+  check_in_time?: string;
+  check_out_time?: string;
+  notes?: string;
+  badge_number?: string;
+  created_at: string;
+  updated_at: string;
+  visitor: Visitor;
+  host: Host;
 }
 
 interface DashboardData {
@@ -40,8 +66,8 @@ interface DashboardData {
     weekly_total: number;
   };
   lists: {
-    pending_approvals: VisitorRequest[];
-    todays_visits: VisitorRequest[];
+    pending_approvals: Visitor[];
+    todays_visits: Visit[];
   };
 }
 
@@ -49,11 +75,11 @@ export default function HostDashboard() {
   const { isAuthenticated, isLoading: authLoading, api } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [selectedRequest, setSelectedRequest] = useState<VisitorRequest | null>(null);
+  const [selectedRequest, setSelectedRequest] = useState<Visitor | null>(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
-  const [selectedPhoto, setSelectedPhoto] = useState<{url: string, type: string} | null>(null);
-  const media_URL = import.meta.env.VITE_MEDIA_URL||'http://127.0.0.1:8000'
+  const [selectedPhoto, setSelectedPhoto] = useState<{ url: string, type: string } | null>(null);
+  const media_URL = import.meta.env.VITE_MEDIA_URL || 'http://127.0.0.1:8000'
 
   // Fetch dashboard data
   const { data: dashboardData, isLoading: dashboardLoading } = useQuery<DashboardData>({
@@ -90,7 +116,9 @@ export default function HostDashboard() {
   // Check-in mutation
   const checkInMutation = useMutation({
     mutationFn: async (visitorId: number) => {
-      const response = await api.post(`/visitor/${visitorId}/check-in`);
+      const response = await api.post('/visits/check-in-visitor', {
+        visitor_id: visitorId,
+      });
       return response.data;
     },
     onSuccess: () => {
@@ -100,12 +128,21 @@ export default function HostDashboard() {
         description: 'Visitor checked in successfully.',
       });
     },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to check in visitor',
+        variant: 'destructive',
+      });
+    },
   });
 
   // Check-out mutation
   const checkOutMutation = useMutation({
     mutationFn: async (visitorId: number) => {
-      const response = await api.post(`/visitor/${visitorId}/check-out`);
+      const response = await api.post('/visits/check-out-visitor', {
+        visitor_id: visitorId,
+      });
       return response.data;
     },
     onSuccess: () => {
@@ -113,6 +150,13 @@ export default function HostDashboard() {
       toast({
         title: 'Success',
         description: 'Visitor checked out successfully.',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to check out visitor',
+        variant: 'destructive',
       });
     },
   });
@@ -124,8 +168,8 @@ export default function HostDashboard() {
   const handleReject = (id: number) => {
     const reason = prompt('Please provide a reason for rejection:');
     if (reason) {
-      updateVisitorMutation.mutate({ 
-        visitorId: id, 
+      updateVisitorMutation.mutate({
+        visitorId: id,
         status: 'rejected',
         notes: reason
       });
@@ -140,7 +184,7 @@ export default function HostDashboard() {
     checkOutMutation.mutate(id);
   };
 
-  const handleViewDetails = (request: VisitorRequest) => {
+  const handleViewDetails = (request: Visitor) => {
     setSelectedRequest(request);
     setIsDetailsModalOpen(true);
   };
@@ -255,7 +299,7 @@ export default function HostDashboard() {
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      {(pendingRequests as VisitorRequest[]).map((request) => (
+                      {(pendingRequests as Visitor[]).map((request) => (
                         <Card key={request.id} className="hover:shadow-md transition-shadow">
                           <CardContent className="p-4 sm:p-6">
                             <div className="flex items-start justify-between mb-4">
@@ -335,40 +379,38 @@ export default function HostDashboard() {
                     <p className="text-gray-600 text-center py-4">No visits scheduled for today</p>
                   ) : (
                     <div className="space-y-4">
-                      {(todayRequests as VisitorRequest[]).map((request) => (
+                      {(todayRequests as Visit[]).map((request) => (
                         <div key={request.id} className="flex items-center space-x-3">
                           <div className="flex-shrink-0">
-                            <div className={`w-2 h-2 rounded-full ${
-                              request.status === 'approved' ? 'bg-blue-500' :
-                              request.status === 'rejected' ? 'bg-red-500' : 'bg-gray-300'
-                            }`}></div>
+                            <div className={`w-2 h-2 rounded-full ${request.visitor.status === 'approved' ? 'bg-blue-500' :
+                              request.visitor.status === 'rejected' ? 'bg-red-500' : 'bg-gray-300'
+                              }`}></div>
                           </div>
                           <div className="flex-1">
                             <p className="text-sm font-medium text-gray-900">
-                              {`${request.f_name} ${request.l_name}`}
+                              {`${request.visitor.f_name} ${request.visitor.l_name}`}
                             </p>
                             <p className="text-xs text-gray-500">
-                              {request.check_in_time ? new Date(request.check_in_time).toLocaleTimeString([], { 
-                                hour: '2-digit', 
-                                minute: '2-digit' 
-                              }) : 'Not checked in'} - {request.purpose.substring(0, 30)}...
+                              {request.check_in_time ? new Date(request.check_in_time).toLocaleTimeString([], {
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              }) : 'Not checked in'} - {request.visitor.purpose ? request.visitor.purpose.substring(0, 30) + '...' : 'No purpose'}
                             </p>
-                            <Badge 
-                              className={`mt-1 ${
-                                request.status === 'approved' ? 'status-approved' :
-                                request.status === 'rejected' ? 'status-rejected' :
-                                'status-pending'
-                              }`}
+                            <Badge
+                              className={`mt-1 ${request.visitor.status === 'approved' ? 'status-approved' :
+                                request.visitor.status === 'rejected' ? 'status-rejected' :
+                                  'status-pending'
+                                }`}
                             >
-                              {request.status === 'approved' ? 'Approved' :
-                               request.status === 'rejected' ? 'Rejected' : 'Pending'}
+                              {request.visitor.status === 'approved' ? 'Approved' :
+                                request.visitor.status === 'rejected' ? 'Rejected' : 'Pending'}
                             </Badge>
                           </div>
-                          {request.status === 'approved' && !request.check_out_time && (
+                          {request.visitor.status === 'approved' && !request.check_out_time && (
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => request.check_in_time ? handleCheckOut(request.id) : handleCheckIn(request.id)}
+                              onClick={() => request.check_in_time ? handleCheckOut(request.visitor.id) : handleCheckIn(request.visitor.id)}
                             >
                               {request.check_in_time ? 'Check Out' : 'Check In'}
                             </Button>
@@ -394,7 +436,7 @@ export default function HostDashboard() {
                 Visitor Details
               </DialogTitle>
             </DialogHeader>
-            
+
             <div className="space-y-6">
               {/* Visitor Basic Info */}
               <div className="flex flex-col sm:flex-row items-start space-y-4 sm:space-y-0 sm:space-x-4">
@@ -425,9 +467,9 @@ export default function HostDashboard() {
                     <h5 className="font-medium text-sm text-gray-700">Visitor Photo</h5>
                     <div className="relative group">
                       {selectedRequest.pic ? (
-                        <img 
+                        <img
                           src={`${media_URL}/storage/${selectedRequest.pic}`}
-                          alt="Visitor Photo" 
+                          alt="Visitor Photo"
                           className="w-full h-32 sm:h-48 object-cover rounded-lg border cursor-pointer hover:opacity-90 transition-opacity"
                           onClick={() => handleViewPhoto(`${media_URL}/storage/${selectedRequest.pic}`, 'Visitor Photo')}
                         />
@@ -440,9 +482,9 @@ export default function HostDashboard() {
                     <h5 className="font-medium text-sm text-gray-700">ID Document</h5>
                     <div className="relative group">
                       {selectedRequest.id_pic ? (
-                        <img 
+                        <img
                           src={`${media_URL}/storage/${selectedRequest.id_pic}`}
-                          alt="ID Document" 
+                          alt="ID Document"
                           className="w-full h-32 sm:h-48 object-cover rounded-lg border cursor-pointer hover:opacity-90 transition-opacity"
                           onClick={() => handleViewPhoto(`${media_URL}/storage/${selectedRequest.id_pic}`, 'ID Document')}
                         />
@@ -506,8 +548,8 @@ export default function HostDashboard() {
           </DialogHeader>
           {selectedPhoto && (
             <div className="relative aspect-video">
-              <img 
-                src={selectedPhoto.url} 
+              <img
+                src={selectedPhoto.url}
                 alt={selectedPhoto.type}
                 className="w-full h-full object-contain rounded-lg"
               />

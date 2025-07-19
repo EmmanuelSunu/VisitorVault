@@ -54,11 +54,13 @@ Route::middleware('auth:sanctum')->group(function () {
     // Visit routes (new)
     Route::get('/visits', [VisitController::class, 'index']);
     Route::post('/visits', [VisitController::class, 'store']);
+    Route::get('/visits/checked-in', [VisitController::class, 'checkedIn']);
+    Route::get('/visits/statistics', [VisitController::class, 'statistics']);
+    Route::post('/visits/check-in-visitor', [VisitController::class, 'checkInVisitor']);
+    Route::post('/visits/check-out-visitor', [VisitController::class, 'checkOutVisitor']);
     Route::get('/visits/{visit}', [VisitController::class, 'show']);
     Route::patch('/visits/{visit}', [VisitController::class, 'update']);
     Route::delete('/visits/{visit}', [VisitController::class, 'destroy']);
-    Route::get('/visits/checked-in', [VisitController::class, 'checkedIn']);
-    Route::get('/visits/statistics', [VisitController::class, 'statistics']);
     Route::patch('/visits/{visit}/check-in', [VisitController::class, 'checkIn']);
     Route::patch('/visits/{visit}/check-out', [VisitController::class, 'checkOut']);
 });

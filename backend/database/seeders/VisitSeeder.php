@@ -22,10 +22,10 @@ class VisitSeeder extends Seeder
             $visitors = Visitor::factory(10)->create();
         }
 
-        // Create various types of visits
+        // Create various types of visits for existing visitors only
         foreach ($visitors as $visitor) {
-            // Create a few visits for each visitor
-            Visit::factory(3)->create([
+            // Create a few regular visits for each visitor
+            Visit::factory(2)->create([
                 'visitor_id' => $visitor->id,
                 'user_id' => $visitor->user_id,
             ]);

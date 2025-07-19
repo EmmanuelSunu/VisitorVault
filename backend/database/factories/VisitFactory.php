@@ -26,7 +26,8 @@ class VisitFactory extends Factory
      */
     public function definition(): array
     {
-        $visitor = Visitor::factory()->create();
+        // Get an existing visitor or create one if none exist
+        $visitor = Visitor::first() ?? Visitor::factory()->create();
 
         return [
             'visitor_id' => $visitor->id,

@@ -115,6 +115,17 @@ class VisitController extends Controller
             return response()->json(['message' => 'Visitor is already checked in for this visit'], 422);
         }
 
+        // Check if visitor already has an active visit
+        $activeVisit = Visit::where('visitor_id', $visit->visitor_id)
+            ->whereNotNull('check_in_time')
+            ->whereNull('check_out_time')
+            ->where('id', '!=', $visit->id)
+            ->first();
+
+        if ($activeVisit) {
+            return response()->json(['message' => 'Visitor is already checked in for another visit'], 422);
+        }
+
         $visit->update([
             'check_in_time' => now(),
         ]);
@@ -143,35 +154,128 @@ class VisitController extends Controller
     }
 
     /**
+     * Find or create a visit for a visitor and check them in
+     */
+    public function checkInVisitor(Request $request)
+    {
+        $request->validate([
+            'visitor_id' => 'required|exists:visitors,id',
+        ]);
+
+        $visitor = Visitor::findOrFail($request->visitor_id);
+
+        if ($visitor->status !== 'approved') {
+            return response()->json(['message' => 'Visitor must be approved before check-in'], 422);
+        }
+
+        // Check if visitor already has an active visit
+        $activeVisit = Visit::where('visitor_id', $visitor->id)
+            ->whereNotNull('check_in_time')
+            ->whereNull('check_out_time')
+            ->first();
+
+        if ($activeVisit) {
+            return response()->json(['message' => 'Visitor is already checked in'], 422);
+        }
+
+        // Find or create a visit for today
+        $visit = Visit::firstOrCreate([
+            'visitor_id' => $visitor->id,
+            'visit_date' => now()->toDateString(),
+        ], [
+            'user_id' => $visitor->user_id,
+            'badge_number' => 'BADGE-' . strtoupper(substr(md5(uniqid()), 0, 8)),
+        ]);
+
+        // Check in the visit
+        $visit->update([
+            'check_in_time' => now(),
+        ]);
+
+        return response()->json($visit->load(['visitor', 'host']));
+    }
+
+    /**
+     * Find and check out a visitor's active visit
+     */
+    public function checkOutVisitor(Request $request)
+    {
+        $request->validate([
+            'visitor_id' => 'required|exists:visitors,id',
+        ]);
+
+        $visitor = Visitor::findOrFail($request->visitor_id);
+
+        // Find the active visit for this visitor
+        $activeVisit = Visit::where('visitor_id', $visitor->id)
+            ->whereNotNull('check_in_time')
+            ->whereNull('check_out_time')
+            ->first();
+
+        if (!$activeVisit) {
+            return response()->json(['message' => 'Visitor is not currently checked in'], 422);
+        }
+
+        // Check out the visit
+        $activeVisit->update([
+            'check_out_time' => now(),
+        ]);
+
+        return response()->json($activeVisit->load(['visitor', 'host']));
+    }
+
+    /**
      * Get currently checked in visits
      */
     public function checkedIn()
     {
-        $visits = Visit::query()
-            ->with(['visitor', 'host'])
-            ->whereNotNull('check_in_time')
-            ->whereNull('check_out_time')
-            ->latest('check_in_time')
-            ->get()
-            ->map(function ($visit) {
-                return [
-                    'id' => $visit->id,
-                    'visitor' => [
-                        'firstName' => $visit->visitor->f_name,
-                        'lastName' => $visit->visitor->l_name,
-                        'photoUrl' => $this->getImageUrl($visit->visitor->pic),
-                    ],
-                    'host' => [
-                        'firstName' => $visit->host->name ?? $visit->visitor->h_name,
-                        'lastName' => '',
-                    ],
-                    'checkedInAt' => $visit->check_in_time,
-                    'badgeNumber' => $visit->badge_number,
-                    'duration' => $visit->check_in_time ? now()->diffForHumans($visit->check_in_time) : null,
-                ];
-            });
+        try {
+            $visits = Visit::query()
+                ->with(['visitor', 'host'])
+                ->whereNotNull('check_in_time')
+                ->whereNull('check_out_time')
+                ->latest('check_in_time')
+                ->get()
+                ->map(function ($visit) {
+                    // Ensure visitor exists
+                    if (!$visit->visitor) {
+                        return null;
+                    }
 
-        return response()->json($visits);
+                    // Handle host name properly
+                    $hostName = '';
+                    if ($visit->host && $visit->host->name) {
+                        $hostName = $visit->host->name;
+                    } elseif ($visit->visitor && $visit->visitor->h_name) {
+                        $hostName = $visit->visitor->h_name;
+                    }
+
+                    return [
+                        'id' => $visit->id,
+                        'visitor' => [
+                            'firstName' => $visit->visitor->f_name ?? '',
+                            'lastName' => $visit->visitor->l_name ?? '',
+                            'photoUrl' => $this->getImageUrl($visit->visitor->pic),
+                        ],
+                        'host' => [
+                            'firstName' => $hostName,
+                            'lastName' => '',
+                        ],
+                        'checkedInAt' => $visit->check_in_time,
+                        'badgeNumber' => $visit->badge_number,
+                        'duration' => $visit->check_in_time ? $this->calculateDuration($visit->check_in_time) : '0m',
+                    ];
+                })
+                ->filter() // Remove null values
+                ->values(); // Re-index array
+
+            return response()->json($visits);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Failed to fetch checked-in visits',
+                'message' => $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
@@ -212,5 +316,29 @@ class VisitController extends Controller
         }
 
         return asset('storage/' . $path);
+    }
+
+    /**
+     * Helper method to calculate duration
+     */
+    private function calculateDuration($checkInTime)
+    {
+        $timeIn = \Carbon\Carbon::parse($checkInTime);
+        $now = \Carbon\Carbon::now();
+        $duration = $now->diffInMinutes($timeIn);
+
+        // Handle negative duration (future check-in time)
+        if ($duration < 0) {
+            return "0m";
+        }
+
+        $hours = floor($duration / 60);
+        $minutes = $duration % 60;
+
+        if ($hours > 0) {
+            return "{$hours}h {$minutes}m";
+        }
+
+        return "{$minutes}m";
     }
 }

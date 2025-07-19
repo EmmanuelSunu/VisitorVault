@@ -251,6 +251,7 @@ class VisitorController extends Controller
                     'company' => $visitor->company,
                     'badgeNumber' => $visitor->id_number,
                     'photoUrl' => $this->getImageUrl($visitor->pic),
+                    'status' => $visitor->status,
                     'visitRequests' => [[
                         'id' => $visitor->id,
                         'status' => $status,

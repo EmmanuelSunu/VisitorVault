@@ -61,7 +61,7 @@ export default function VisitorRegistration() {
   const [, setLocation] = useLocation();
 
   const { api } = useAuth();
-  
+
   // Registration mutation using real API
   const registrationMutation = useMutation({
     mutationFn: async (data: {
@@ -247,9 +247,8 @@ export default function VisitorRegistration() {
             <div className="flex items-center space-x-1 sm:space-x-4 overflow-x-auto pb-2">
               {[1, 2, 3, 4, 5, 6].map((stepNumber) => (
                 <div key={stepNumber} className="flex items-center flex-shrink-0">
-                  <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-xs sm:text-sm ${
-                    step >= stepNumber ? 'bg-primary text-primary-foreground' : 'bg-gray-300 text-gray-600'
-                  }`}>
+                  <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-xs sm:text-sm ${step >= stepNumber ? 'bg-primary text-primary-foreground' : 'bg-gray-300 text-gray-600'
+                    }`}>
                     {getStepIcon(stepNumber)}
                   </div>
                   {stepNumber < 6 && <div className="w-4 sm:w-8 h-0.5 bg-gray-300 mx-1 sm:mx-2"></div>}
@@ -315,10 +314,10 @@ export default function VisitorRegistration() {
                       <FormItem>
                         <FormLabel>Purpose of Visit</FormLabel>
                         <FormControl>
-                          <Textarea 
+                          <Textarea
                             placeholder="Please describe the purpose of your visit..."
                             className="min-h-[100px]"
-                            {...field} 
+                            {...field}
                           />
                         </FormControl>
                         <FormMessage />
@@ -763,7 +762,7 @@ export default function VisitorRegistration() {
             </CardHeader>
             <CardContent>
               <div className="text-center space-y-6">
-                <div className="w-48 h-48 mx-auto bg-white border-2 border-gray-300 rounded-lg flex items-center justify-center">
+                {/* <div className="w-48 h-48 mx-auto bg-white border-2 border-gray-300 rounded-lg flex items-center justify-center">
                   <div className="text-center">
                     <div className="w-32 h-32 bg-gray-200 mx-auto mb-2 flex items-center justify-center">
                       <span className="text-xs">QR Code</span>
@@ -772,7 +771,7 @@ export default function VisitorRegistration() {
                       Badge #{registrationResult?.badgeNumber || 'VIS' + Date.now()}
                     </p>
                   </div>
-                </div>
+                </div> */}
 
                 <div className="space-y-2">
                   <h3 className="text-xl font-semibold text-gray-900">
@@ -793,13 +792,13 @@ export default function VisitorRegistration() {
                 </div>
 
                 <div className="space-y-3">
-                  <Button
+                  {/* <Button
                     className="w-full"
                     onClick={() => setIsQrModalOpen(true)}
                     disabled={!registrationResult}
                   >
                     View QR Code (Coming Soon)
-                  </Button>
+                  </Button> */}
                   <Button
                     variant="outline"
                     className="w-full"

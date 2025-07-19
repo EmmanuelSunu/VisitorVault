@@ -4,7 +4,7 @@ import axios from "axios";
 
 // Create axios instance with base URL and default headers
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000/api',
+  baseURL: import.meta.env.VITE_API_URL || 'http://visitvault.test/api',
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
@@ -68,15 +68,15 @@ export function useAuth() {
       setIsLoading(true);
       const response = await api.post('/login', { email, password });
       const { token, user } = response.data;
-      
+
       localStorage.setItem('token', token);
       setUser(user);
-      
+
       return { success: true, user };
     } catch (error: any) {
-      return { 
-        success: false, 
-        message: error.response?.data?.message || 'Login failed' 
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Login failed'
       };
     } finally {
       setIsLoading(false);
