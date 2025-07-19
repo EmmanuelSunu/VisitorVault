@@ -223,6 +223,83 @@ export default function ReceptionInterface() {
     },
   });
 
+  // Emergency checkout all mutation
+  const emergencyCheckoutMutation = useMutation({
+    mutationFn: async () => {
+      const response = await api.post('/visits/emergency-checkout-all');
+      return response.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/visits/checked-in"] });
+      toast({
+        title: "Emergency Checkout Complete",
+        description: data.message,
+      });
+    },
+    onError: (error: any) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to perform emergency checkout",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Export today's report mutation
+  const exportReportMutation = useMutation({
+    mutationFn: async () => {
+      const response = await api.get('/visits/export-today-report');
+      return response.data;
+    },
+    onSuccess: (data) => {
+      // Create and download CSV file
+      const csvContent = generateCSV(data);
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `visitor-report-${data.date}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+
+      toast({
+        title: "Report Exported",
+        description: "Today's visitor report has been downloaded.",
+      });
+    },
+    onError: (error: any) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to export report",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleSearch = () => {
     if (searchQuery.trim()) {
       searchMutation.mutate(searchQuery.trim());
@@ -275,6 +352,17 @@ export default function ReceptionInterface() {
     }
   };
 
+  const handleEmergencyCheckout = () => {
+    const confirmed = confirm('Are you sure you want to check out ALL currently checked-in visitors? This action cannot be undone.');
+    if (confirmed) {
+      emergencyCheckoutMutation.mutate();
+    }
+  };
+
+  const handleExportReport = () => {
+    exportReportMutation.mutate();
+  };
+
   // Calculate duration for checked-in visitors
   const calculateDuration = (checkedInAt: string): string => {
     const timeIn = new Date(checkedInAt);
@@ -283,6 +371,46 @@ export default function ReceptionInterface() {
     const hours = Math.floor(duration / 60);
     const minutes = duration % 60;
     return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+  };
+
+  // Generate CSV content from report data
+  const generateCSV = (data: any): string => {
+    const headers = [
+      'ID',
+      'Visitor Name',
+      'Visitor Email',
+      'Visitor Company',
+      'Host Name',
+      'Visit Date',
+      'Check In Time',
+      'Check Out Time',
+      'Duration',
+      'Badge Number',
+      'Notes',
+      'Status',
+      'Created At',
+      'Updated At'
+    ];
+
+    const csvHeaders = headers.join(',');
+    const csvRows = data.visits.map((visit: any) => [
+      visit.id,
+      `"${visit.visitor_name}"`,
+      `"${visit.visitor_email}"`,
+      `"${visit.visitor_company}"`,
+      `"${visit.host_name}"`,
+      visit.visit_date,
+      visit.check_in_time || '',
+      visit.check_out_time || '',
+      visit.duration || '',
+      visit.badge_number || '',
+      `"${visit.notes || ''}"`,
+      visit.status,
+      visit.created_at || '',
+      visit.updated_at || ''
+    ].join(','));
+
+    return [csvHeaders, ...csvRows].join('\n');
   };
 
   if (isLoading) {
@@ -495,13 +623,27 @@ export default function ReceptionInterface() {
               {/* Quick Actions */}
               <div className="space-y-3">
                 <h3 className="text-sm font-medium text-gray-700">Quick Actions</h3>
-                <Button variant="outline" className="w-full justify-start">
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={handleEmergencyCheckout}
+                  disabled={emergencyCheckoutMutation.isPending}
+                >
                   <AlertTriangle className="h-4 w-4 mr-3 text-amber-500" />
-                  <span className="text-sm">Emergency Checkout All</span>
+                  <span className="text-sm">
+                    {emergencyCheckoutMutation.isPending ? "Processing..." : "Emergency Checkout All"}
+                  </span>
                 </Button>
-                <Button variant="outline" className="w-full justify-start">
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={handleExportReport}
+                  disabled={exportReportMutation.isPending}
+                >
                   <FileOutput className="h-4 w-4 mr-3 text-blue-500" />
-                  <span className="text-sm">Export Today's Report</span>
+                  <span className="text-sm">
+                    {exportReportMutation.isPending ? "Generating..." : "Export Today's Report"}
+                  </span>
                 </Button>
               </div>
             </CardContent>

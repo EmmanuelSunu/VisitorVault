@@ -27,35 +27,35 @@ class DatabaseSeeder extends Seeder
             'role' => 'receptionist'
         ]);
 
-        // Create some host users
-        $hosts = User::factory()->count(5)->host()->create();
+        // // Create some host users
+        // $hosts = User::factory()->count(5)->host()->create();
 
-        // Create visitors for each host
-        foreach ($hosts as $host) {
-            // Pending visitors
-            Visitor::factory()
-                ->count(3)
-                ->forHost($host)
-                ->create();
+        // // Create visitors for each host
+        // foreach ($hosts as $host) {
+        //     // Pending visitors
+        //     Visitor::factory()
+        //         ->count(3)
+        //         ->forHost($host)
+        //         ->create();
 
-            // Approved visitors
-            Visitor::factory()
-                ->count(2)
-                ->forHost($host)
-                ->approved()
-                ->create();
+        //     // Approved visitors
+        //     Visitor::factory()
+        //         ->count(2)
+        //         ->forHost($host)
+        //         ->approved()
+        //         ->create();
 
-            // Rejected visitors
-            Visitor::factory()
-                ->count(1)
-                ->forHost($host)
-                ->rejected()
-                ->create();
-        }
+        //     // Rejected visitors
+        //     Visitor::factory()
+        //         ->count(1)
+        //         ->forHost($host)
+        //         ->rejected()
+        //         ->create();
+        // }
 
-        // Seed visits after visitors are created
-        $this->call([
-            VisitSeeder::class,
-        ]);
+        // // Seed visits after visitors are created
+        // $this->call([
+        //     VisitSeeder::class,
+        // ]);
     }
 }

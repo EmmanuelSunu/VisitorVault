@@ -178,17 +178,26 @@ class VisitController extends Controller
             return response()->json(['message' => 'Visitor is already checked in'], 422);
         }
 
-        // Find or create a visit for today
-        $visit = Visit::firstOrCreate([
-            'visitor_id' => $visitor->id,
-            'visit_date' => now()->toDateString(),
-        ], [
-            'user_id' => $visitor->user_id,
-            'badge_number' => 'BADGE-' . strtoupper(substr(md5(uniqid()), 0, 8)),
-        ]);
+        // Find existing visit for today that hasn't been checked out
+        $existingVisit = Visit::where('visitor_id', $visitor->id)
+            ->where('visit_date', now()->toDateString())
+            ->whereNull('check_out_time')
+            ->first();
 
-        // Check in the visit
-        $visit->update([
+        if ($existingVisit) {
+            // Use the existing visit and check in
+            $existingVisit->update([
+                'check_in_time' => now(),
+            ]);
+            return response()->json($existingVisit->load(['visitor', 'host']));
+        }
+
+        // Create a new visit for today
+        $visit = Visit::create([
+            'visitor_id' => $visitor->id,
+            'user_id' => $visitor->user_id,
+            'visit_date' => now()->toDateString(),
+            'badge_number' => 'BADGE-' . strtoupper(substr(md5(uniqid()), 0, 8)),
             'check_in_time' => now(),
         ]);
 
@@ -206,7 +215,7 @@ class VisitController extends Controller
 
         $visitor = Visitor::findOrFail($request->visitor_id);
 
-        // Find the active visit for this visitor
+        // Find the active visit for this visitor (checked in but not checked out)
         $activeVisit = Visit::where('visitor_id', $visitor->id)
             ->whereNotNull('check_in_time')
             ->whereNull('check_out_time')
@@ -331,6 +340,124 @@ class VisitController extends Controller
         if ($duration < 0) {
             return "0m";
         }
+
+        $hours = floor($duration / 60);
+        $minutes = $duration % 60;
+
+        if ($hours > 0) {
+            return "{$hours}h {$minutes}m";
+        }
+
+        return "{$minutes}m";
+    }
+
+    /**
+     * Emergency checkout all currently checked in visitors
+     */
+    public function emergencyCheckoutAll()
+    {
+        try {
+            $activeVisits = Visit::whereNotNull('check_in_time')
+                ->whereNull('check_out_time')
+                ->get();
+
+            $checkoutCount = 0;
+            foreach ($activeVisits as $visit) {
+                $visit->update([
+                    'check_out_time' => now(),
+                    'notes' => $visit->notes ? $visit->notes . ' [EMERGENCY CHECKOUT]' : 'EMERGENCY CHECKOUT'
+                ]);
+                $checkoutCount++;
+            }
+
+            return response()->json([
+                'message' => "Emergency checkout completed. {$checkoutCount} visitors checked out.",
+                'checkout_count' => $checkoutCount,
+                'timestamp' => now()->toISOString()
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Failed to perform emergency checkout',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Export today's visit report
+     */
+    public function exportTodayReport()
+    {
+        try {
+            $startOfDay = now()->startOfDay();
+            $endOfDay = now()->endOfDay();
+
+            // Get all visits for today (from start of day to end of day)
+            $todayVisits = Visit::with(['visitor', 'host'])
+                ->whereBetween('visit_date', [$startOfDay, $endOfDay])
+                ->orderBy('created_at', 'asc')
+                ->get();
+
+            // Get statistics for the full day
+            $totalVisits = $todayVisits->count();
+            $checkedInVisits = $todayVisits->whereNotNull('check_in_time')->whereNull('check_out_time')->count();
+            $checkedOutVisits = $todayVisits->whereNotNull('check_out_time')->count();
+            $pendingVisits = $todayVisits->whereNull('check_in_time')->count();
+
+            // Prepare report data
+            $reportData = [
+                'date' => $startOfDay->toDateString(),
+                'generated_at' => now()->toISOString(),
+                'statistics' => [
+                    'total_visits' => $totalVisits,
+                    'currently_checked_in' => $checkedInVisits,
+                    'checked_out' => $checkedOutVisits,
+                    'pending' => $pendingVisits,
+                ],
+                'visits' => $todayVisits->map(function ($visit) {
+                    return [
+                        'id' => $visit->id,
+                        'visitor_name' => $visit->visitor ? $visit->visitor->f_name . ' ' . $visit->visitor->l_name : 'Unknown',
+                        'visitor_email' => $visit->visitor ? $visit->visitor->email : '',
+                        'visitor_company' => $visit->visitor ? $visit->visitor->company : '',
+                        'host_name' => $visit->host ? $visit->host->name : ($visit->visitor ? $visit->visitor->h_name : 'Unknown'),
+                        'visit_date' => $visit->visit_date,
+                        'check_in_time' => $visit->check_in_time,
+                        'check_out_time' => $visit->check_out_time,
+                        'duration' => $visit->check_in_time && $visit->check_out_time
+                            ? $this->calculateDurationBetween($visit->check_in_time, $visit->check_out_time)
+                            : ($visit->check_in_time ? $this->calculateDuration($visit->check_in_time) : null),
+                        'badge_number' => $visit->badge_number,
+                        'notes' => $visit->notes,
+                        'status' => $visit->check_out_time ? 'checked_out' : ($visit->check_in_time ? 'checked_in' : 'pending'),
+                        'created_at' => $visit->created_at,
+                        'updated_at' => $visit->updated_at,
+                    ];
+                }),
+                'date_range' => [
+                    'start' => $startOfDay->toISOString(),
+                    'end' => $endOfDay->toISOString(),
+                    'timezone' => config('app.timezone')
+                ]
+            ];
+
+            return response()->json($reportData);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Failed to generate today\'s report',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Helper method to calculate duration between two times
+     */
+    private function calculateDurationBetween($checkInTime, $checkOutTime)
+    {
+        $timeIn = \Carbon\Carbon::parse($checkInTime);
+        $timeOut = \Carbon\Carbon::parse($checkOutTime);
+        $duration = $timeOut->diffInMinutes($timeIn);
 
         $hours = floor($duration / 60);
         $minutes = $duration % 60;

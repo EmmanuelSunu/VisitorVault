@@ -78,6 +78,14 @@ class VisitorController extends Controller
             'status' => 'pending'
         ]);
 
+        $visitor->visits()->create([
+            'user_id' => $request->user()->id ?? 1,
+            'visit_date' => $request->visit_date,
+            'check_in_time' => null,
+            'check_out_time' => null,
+            'notes' => $request->notes,
+        ]);
+
         return response()->json($visitor, 201);
     }
 

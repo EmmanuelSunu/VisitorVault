@@ -58,6 +58,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/visits/statistics', [VisitController::class, 'statistics']);
     Route::post('/visits/check-in-visitor', [VisitController::class, 'checkInVisitor']);
     Route::post('/visits/check-out-visitor', [VisitController::class, 'checkOutVisitor']);
+    Route::post('/visits/emergency-checkout-all', [VisitController::class, 'emergencyCheckoutAll']);
+    Route::get('/visits/export-today-report', [VisitController::class, 'exportTodayReport']);
     Route::get('/visits/{visit}', [VisitController::class, 'show']);
     Route::patch('/visits/{visit}', [VisitController::class, 'update']);
     Route::delete('/visits/{visit}', [VisitController::class, 'destroy']);
