@@ -51,20 +51,11 @@ class DatabaseSeeder extends Seeder
                 ->forHost($host)
                 ->rejected()
                 ->create();
-
-            // Currently checked in visitors
-            Visitor::factory()
-                ->count(1)
-                ->forHost($host)
-                ->checkedIn()
-                ->create();
-
-            // Completed visits
-            Visitor::factory()
-                ->count(3)
-                ->forHost($host)
-                ->completed()
-                ->create();
         }
+
+        // Seed visits after visitors are created
+        $this->call([
+            VisitSeeder::class,
+        ]);
     }
 }

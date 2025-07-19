@@ -20,8 +20,6 @@ class VisitorFactory extends Factory
     {
         $host = User::factory()->host()->create();
         $visitDate = fake()->dateTimeBetween('-1 week', '+1 week');
-        $checkInTime = $visitDate < now() ? Carbon::parse($visitDate)->addHours(fake()->numberBetween(9, 17)) : null;
-        $checkOutTime = $checkInTime ? (fake()->boolean(70) ? $checkInTime->copy()->addHours(fake()->numberBetween(1, 4)) : null) : null;
 
         return [
             'f_name' => fake()->firstName(),
@@ -32,8 +30,6 @@ class VisitorFactory extends Factory
             'purpose' => fake()->randomElement(['Meeting', 'Interview', 'Delivery', 'Maintenance', 'Consultation']),
             'status' => 'pending',
             'visit_date' => $visitDate,
-            'check_in_time' => $checkInTime,
-            'check_out_time' => $checkOutTime,
             'user_id' => $host->id,
             'h_name' => $host->name,
             'h_email' => $host->email,
@@ -67,30 +63,7 @@ class VisitorFactory extends Factory
         ]);
     }
 
-    /**
-     * Indicate that the visitor is checked in.
-     */
-    public function checkedIn(): static
-    {
-        return $this->state(fn(array $attributes) => [
-            'status' => 'approved',
-            'check_in_time' => now()->subHours(fake()->numberBetween(1, 4)),
-            'check_out_time' => null,
-        ]);
-    }
-
-    /**
-     * Indicate that the visitor has completed their visit.
-     */
-    public function completed(): static
-    {
-        $checkIn = now()->subHours(fake()->numberBetween(2, 8));
-        return $this->state(fn(array $attributes) => [
-            'status' => 'approved',
-            'check_in_time' => $checkIn,
-            'check_out_time' => $checkIn->copy()->addHours(fake()->numberBetween(1, 4)),
-        ]);
-    }
+    // Check-in and check-out functionality moved to Visit model
 
     /**
      * Set a specific host for the visitor.

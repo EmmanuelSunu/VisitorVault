@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VisitorController;
+use App\Http\Controllers\VisitController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -46,13 +47,18 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/visitors/checked-in', [VisitorController::class, 'checkedIn']);
     Route::get('/visitors/search', [VisitorController::class, 'search']);
     Route::get('/visitors/badge/{badgeNumber}', [VisitorController::class, 'findByBadge']);
-    Route::patch('/visitors/{visitor}/check-in', [VisitorController::class, 'checkInVisitor']);
-    Route::patch('/visitors/{visitor}/check-out', [VisitorController::class, 'checkOutVisitor']);
     Route::get('/visitor/{visitor}', [VisitorController::class, 'show']);
     Route::patch('/visitor/{visitor}', [VisitorController::class, 'update']);
     Route::delete('/visitor/{visitor}', [VisitorController::class, 'destroy']);
 
-    // Check-in/out routes
-    Route::post('/visitor/{visitor}/check-in', [VisitorController::class, 'checkIn']);
-    Route::post('/visitor/{visitor}/check-out', [VisitorController::class, 'checkOut']);
+    // Visit routes (new)
+    Route::get('/visits', [VisitController::class, 'index']);
+    Route::post('/visits', [VisitController::class, 'store']);
+    Route::get('/visits/{visit}', [VisitController::class, 'show']);
+    Route::patch('/visits/{visit}', [VisitController::class, 'update']);
+    Route::delete('/visits/{visit}', [VisitController::class, 'destroy']);
+    Route::get('/visits/checked-in', [VisitController::class, 'checkedIn']);
+    Route::get('/visits/statistics', [VisitController::class, 'statistics']);
+    Route::patch('/visits/{visit}/check-in', [VisitController::class, 'checkIn']);
+    Route::patch('/visits/{visit}/check-out', [VisitController::class, 'checkOut']);
 });

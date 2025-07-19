@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Visitor extends Model
 {
@@ -27,20 +28,21 @@ class Visitor extends Model
         'id_pic',
         'status',
         'visit_date',
-        'check_in_time',
-        'check_out_time',
         'notes',
         'user_id'
     ];
 
     protected $casts = [
         'visit_date' => 'datetime',
-        'check_in_time' => 'datetime',
-        'check_out_time' => 'datetime',
     ];
 
     public function host(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function visits(): HasMany
+    {
+        return $this->hasMany(Visit::class);
     }
 }

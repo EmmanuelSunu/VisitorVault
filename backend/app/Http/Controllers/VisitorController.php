@@ -129,31 +129,7 @@ class VisitorController extends Controller
         return response()->json(null, 204);
     }
 
-    public function checkIn(Visitor $visitor)
-    {
-        if ($visitor->status !== 'approved') {
-            return response()->json(['message' => 'Visitor must be approved before check-in'], 422);
-        }
-
-        $visitor->update([
-            'check_in_time' => now(),
-        ]);
-
-        return response()->json($visitor);
-    }
-
-    public function checkOut(Visitor $visitor)
-    {
-        if (!$visitor->check_in_time) {
-            return response()->json(['message' => 'Visitor must be checked in before check-out'], 422);
-        }
-
-        $visitor->update([
-            'check_out_time' => now(),
-        ]);
-
-        return response()->json($visitor);
-    }
+    // Check-in and check-out functionality moved to VisitController
 
     /**
      * Get dashboard statistics and lists
@@ -173,26 +149,37 @@ class VisitorController extends Controller
             ->latest()
             ->get();
 
-        // Get today's visits
+        // Get today's visits (from visits table)
         $today = Carbon::today();
-        $todaysVisits = (clone $baseQuery)
-            ->whereDate('visit_date', $today)
-            ->with('host')
-            ->latest()
-            ->get();
+        $todaysVisits = \App\Models\Visit::query()
+            ->with(['visitor', 'host'])
+            ->whereDate('visit_date', $today);
 
-        // Get currently checked in visitors
-        $currentlyCheckedIn = (clone $baseQuery)
+        if ($request->user()->role === 'host') {
+            $todaysVisits->where('user_id', $request->user()->id);
+        }
+        $todaysVisits = $todaysVisits->latest()->get();
+
+        // Get currently checked in visitors (from visits table)
+        $currentlyCheckedIn = \App\Models\Visit::query()
             ->whereNotNull('check_in_time')
-            ->whereNull('check_out_time')
-            ->count();
+            ->whereNull('check_out_time');
 
-        // Get total visits for the week
+        if ($request->user()->role === 'host') {
+            $currentlyCheckedIn->where('user_id', $request->user()->id);
+        }
+        $currentlyCheckedIn = $currentlyCheckedIn->count();
+
+        // Get total visits for the week (from visits table)
         $weekStart = Carbon::now()->startOfWeek();
         $weekEnd = Carbon::now()->endOfWeek();
-        $weeklyTotal = (clone $baseQuery)
-            ->whereBetween('visit_date', [$weekStart, $weekEnd])
-            ->count();
+        $weeklyTotal = \App\Models\Visit::query()
+            ->whereBetween('visit_date', [$weekStart, $weekEnd]);
+
+        if ($request->user()->role === 'host') {
+            $weeklyTotal->where('user_id', $request->user()->id);
+        }
+        $weeklyTotal = $weeklyTotal->count();
 
         return response()->json([
             'statistics' => [
@@ -210,33 +197,12 @@ class VisitorController extends Controller
 
     /**
      * Get list of currently checked in visitors
+     * @deprecated Use VisitController::checkedIn() instead
      */
     public function checkedIn()
     {
-        $visitors = Visitor::query()
-            ->with(['host'])
-            ->whereNotNull('check_in_time')
-            ->whereNull('check_out_time')
-            ->latest('check_in_time')
-            ->get()
-            ->map(function ($visitor) {
-                return [
-                    'id' => $visitor->id,
-                    'visitor' => [
-                        'firstName' => $visitor->f_name,
-                        'lastName' => $visitor->l_name,
-                        'photoUrl' => $this->getImageUrl($visitor->pic),
-                    ],
-                    'host' => [
-                        'firstName' => $visitor->h_name,
-                        'lastName' => '', // Host last name is not stored separately in current schema
-                    ],
-                    'checkedInAt' => $visitor->check_in_time,
-                    'duration' => $visitor->visit_duration ?? '2 hours', // Default duration if not specified
-                ];
-            });
-
-        return response()->json($visitors);
+        // This method is deprecated, use VisitController::checkedIn() instead
+        return response()->json(['message' => 'Use /api/visits/checked-in endpoint instead'], 400);
     }
 
     /**
@@ -257,11 +223,27 @@ class VisitorController extends Controller
                     ->orWhere('company', 'like', "%{$query}%")
                     ->orWhere('id_number', 'like', "%{$query}%");
             })
-            ->with('host')
+            ->with(['host', 'visits'])
             ->latest()
             ->limit(10)
             ->get()
             ->map(function ($visitor) {
+                // Get the latest visit for status
+                $latestVisit = $visitor->visits()->latest()->first();
+                $status = $visitor->status;
+                $checkedInAt = null;
+                $checkedOutAt = null;
+
+                if ($latestVisit) {
+                    if ($latestVisit->check_out_time) {
+                        $status = 'checked_out';
+                        $checkedOutAt = $latestVisit->check_out_time;
+                    } elseif ($latestVisit->check_in_time) {
+                        $status = 'checked_in';
+                        $checkedInAt = $latestVisit->check_in_time;
+                    }
+                }
+
                 return [
                     'id' => $visitor->id,
                     'firstName' => $visitor->f_name,
@@ -271,9 +253,9 @@ class VisitorController extends Controller
                     'photoUrl' => $this->getImageUrl($visitor->pic),
                     'visitRequests' => [[
                         'id' => $visitor->id,
-                        'status' => $visitor->check_out_time ? 'checked_out' : ($visitor->check_in_time ? 'checked_in' : ($visitor->status ?? 'pending')),
-                        'checkedInAt' => $visitor->check_in_time,
-                        'checkedOutAt' => $visitor->check_out_time,
+                        'status' => $status,
+                        'checkedInAt' => $checkedInAt,
+                        'checkedOutAt' => $checkedOutAt,
                         'duration' => $visitor->visit_duration ?? '2 hours',
                         'host' => [
                             'id' => $visitor->user_id,
@@ -293,11 +275,27 @@ class VisitorController extends Controller
     public function findByBadge($badgeNumber)
     {
         $visitor = Visitor::where('id_number', $badgeNumber)
-            ->with('host')
+            ->with(['host', 'visits'])
             ->first();
 
         if (!$visitor) {
             return response()->json(['message' => 'Visitor not found'], 404);
+        }
+
+        // Get the latest visit for status
+        $latestVisit = $visitor->visits()->latest()->first();
+        $status = $visitor->status;
+        $checkedInAt = null;
+        $checkedOutAt = null;
+
+        if ($latestVisit) {
+            if ($latestVisit->check_out_time) {
+                $status = 'checked_out';
+                $checkedOutAt = $latestVisit->check_out_time;
+            } elseif ($latestVisit->check_in_time) {
+                $status = 'checked_in';
+                $checkedInAt = $latestVisit->check_in_time;
+            }
         }
 
         return response()->json([
@@ -309,9 +307,9 @@ class VisitorController extends Controller
             'photoUrl' => $this->getImageUrl($visitor->pic),
             'visitRequests' => [[
                 'id' => $visitor->id,
-                'status' => $visitor->check_out_time ? 'checked_out' : ($visitor->check_in_time ? 'checked_in' : ($visitor->status ?? 'pending')),
-                'checkedInAt' => $visitor->check_in_time,
-                'checkedOutAt' => $visitor->check_out_time,
+                'status' => $status,
+                'checkedInAt' => $checkedInAt,
+                'checkedOutAt' => $checkedOutAt,
                 'duration' => $visitor->visit_duration ?? '2 hours',
                 'host' => [
                     'id' => $visitor->user_id,
@@ -322,72 +320,29 @@ class VisitorController extends Controller
         ]);
     }
 
-    /**
-     * Check in a visitor
-     */
-    public function checkInVisitor($id)
-    {
-        $visitor = Visitor::findOrFail($id);
-
-        if ($visitor->check_in_time) {
-            return response()->json(['message' => 'Visitor is already checked in'], 422);
-        }
-
-        if ($visitor->status !== 'approved') {
-            return response()->json(['message' => 'Visit must be approved before check-in'], 422);
-        }
-
-        $visitor->update([
-            'check_in_time' => now(),
-            'status' => 'checked_in'
-        ]);
-
-        return response()->json(['message' => 'Visitor checked in successfully']);
-    }
-
-    /**
-     * Check out a visitor
-     */
-    public function checkOutVisitor($id)
-    {
-        $visitor = Visitor::findOrFail($id);
-
-        if (!$visitor->check_in_time) {
-            return response()->json(['message' => 'Visitor must be checked in first'], 422);
-        }
-
-        if ($visitor->check_out_time) {
-            return response()->json(['message' => 'Visitor is already checked out'], 422);
-        }
-
-        $visitor->update([
-            'check_out_time' => now(),
-            'status' => 'checked_out'
-        ]);
-
-        return response()->json(['message' => 'Visitor checked out successfully']);
-    }
+    // Check-in and check-out methods moved to VisitController
 
     /**
      * Get recent visitor activity logs
      */
     public function activityLogs(Request $request)
     {
-        $query = Visitor::query()
+        $activities = collect();
+
+        // Get visitor registrations and status changes
+        $visitorQuery = Visitor::query()
             ->with('host')
             ->where(function ($q) {
                 $q->whereNotNull('created_at') // New registrations
-                    ->orWhereNotNull('check_in_time') // Check-ins
-                    ->orWhereNotNull('check_out_time') // Check-outs
                     ->orWhereIn('status', ['approved', 'rejected']); // Status changes
             });
 
         // If user is a host, only show their visitors' activities
         if ($request->user()->role === 'host') {
-            $query->where('user_id', $request->user()->id);
+            $visitorQuery->where('user_id', $request->user()->id);
         }
 
-        $activities = $query->latest()->limit(10)->get()->map(function ($visitor) {
+        $visitorActivities = $visitorQuery->latest()->limit(10)->get()->map(function ($visitor) {
             $activities = [];
 
             // Registration
@@ -410,35 +365,57 @@ class VisitorController extends Controller
                 ];
             }
 
+            return $activities;
+        })->flatten(1);
+
+        // Get visit activities (check-ins and check-outs)
+        $visitQuery = \App\Models\Visit::query()
+            ->with(['visitor', 'host'])
+            ->where(function ($q) {
+                $q->whereNotNull('check_in_time')
+                    ->orWhereNotNull('check_out_time');
+            });
+
+        // If user is a host, only show their visits' activities
+        if ($request->user()->role === 'host') {
+            $visitQuery->where('user_id', $request->user()->id);
+        }
+
+        $visitActivities = $visitQuery->latest()->limit(10)->get()->map(function ($visit) {
+            $activities = [];
+
             // Check-in
-            if ($visitor->check_in_time) {
+            if ($visit->check_in_time) {
                 $activities[] = [
                     'type' => 'check_in',
-                    'visitor_name' => $visitor->f_name . ' ' . $visitor->l_name,
-                    'host_name' => $visitor->h_name,
-                    'timestamp' => $visitor->check_in_time,
+                    'visitor_name' => $visit->visitor->f_name . ' ' . $visit->visitor->l_name,
+                    'host_name' => $visit->host->name ?? $visit->visitor->h_name,
+                    'timestamp' => $visit->check_in_time,
                     'description' => "Visitor checked in"
                 ];
             }
 
             // Check-out
-            if ($visitor->check_out_time) {
+            if ($visit->check_out_time) {
                 $activities[] = [
                     'type' => 'check_out',
-                    'visitor_name' => $visitor->f_name . ' ' . $visitor->l_name,
-                    'host_name' => $visitor->h_name,
-                    'timestamp' => $visitor->check_out_time,
+                    'visitor_name' => $visit->visitor->f_name . ' ' . $visit->visitor->l_name,
+                    'host_name' => $visit->host->name ?? $visit->visitor->h_name,
+                    'timestamp' => $visit->check_out_time,
                     'description' => "Visitor checked out"
                 ];
             }
 
             return $activities;
-        })->flatten(1)
+        })->flatten(1);
+
+        // Combine and sort all activities
+        $allActivities = $visitorActivities->concat($visitActivities)
             ->sortByDesc('timestamp')
             ->values()
             ->take(10);
 
-        return response()->json($activities);
+        return response()->json($allActivities);
     }
 
     private function saveBase64Image($base64Image, $folder)
