@@ -78,7 +78,7 @@ export default function VisitorRegistration() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
 
-  const { api } = useAuth();
+  const { api, user } = useAuth();
 
   // Form for returning visitor check
   const returningVisitorForm = useForm<z.infer<typeof returningVisitorSchema>>({
@@ -224,6 +224,10 @@ export default function VisitorRegistration() {
 
   // Navigation handlers
   const handleStaffLogin = () => {
+    setLocation("/host");
+  };
+
+  const handleLogin = () => {
     setLocation("/staff-login");
   };
 
@@ -409,10 +413,17 @@ export default function VisitorRegistration() {
               <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Desiderata Visitor Management System</h1>
               <p className="text-sm sm:text-base text-gray-600">Welcome! Please complete your registration below.</p>
             </div>
-            <Button variant="ghost" onClick={handleStaffLogin} className="text-sm w-full sm:w-auto">
-              <Settings className="h-4 w-4 mr-2" />
-              Staff Login
-            </Button>
+            {user ? (
+              <Button variant="ghost" onClick={handleStaffLogin} className="text-sm w-full sm:w-auto">
+                <Settings className="h-4 w-4 mr-2" />
+                Dashboard
+              </Button>
+            ) : (
+              <Button variant="ghost" onClick={handleLogin} className="text-sm w-full sm:w-auto">
+                <User className="h-4 w-4 mr-2" />
+                Login
+              </Button>
+            )}
           </div>
         </div>
       </header>

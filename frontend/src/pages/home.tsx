@@ -171,7 +171,7 @@ export default function Home() {
                 
                 <Button 
                   variant="outline" 
-                  onClick={() => setLocation('/register')}
+                  onClick={() => setLocation('/')}
                   className="justify-start"
                 >
                   <Clock className="h-4 w-4 mr-2" />
