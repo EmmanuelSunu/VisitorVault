@@ -84,13 +84,13 @@ class VisitorController extends Controller
             'status' => 'pending'
         ]);
 
-        $visitor->visits()->create([
-            'user_id' => $request->user()->id ?? 1,
-            'visit_date' => $request->visit_date,
-            'check_in_time' => null,
-            'check_out_time' => null,
-            'notes' => $request->notes,
-        ]);
+        // $visitor->visits()->create([
+        //     'user_id' => $request->user()->id ?? 1,
+        //     'visit_date' => $request->visit_date,
+        //     'check_in_time' => null,
+        //     'check_out_time' => null,
+        //     'notes' => $request->notes,
+        // ]);
 
         return response()->json($visitor, 201);
     }
@@ -341,18 +341,15 @@ class VisitorController extends Controller
     public function findByEmailOrPhone(Request $request)
     {
         $request->validate([
-            'email' => 'required_without:phone|email|max:255',
-            'phone' => 'required_without:email|string|max:20',
+            'search' => 'required|string|max:255',
         ]);
 
+        $searchTerm = $request->search;
+
         $query = Visitor::query()
-            ->where(function ($q) use ($request) {
-                if ($request->has('email')) {
-                    $q->where('email', $request->email);
-                }
-                if ($request->has('phone')) {
-                    $q->orWhere('phone', $request->phone);
-                }
+            ->where(function ($q) use ($searchTerm) {
+                $q->where('email', 'like', "%{$searchTerm}%")
+                    ->orWhere('phone', 'like', "%{$searchTerm}%");
             })
             ->where('status', 'approved')
             ->with(['host', 'visits'])
@@ -398,9 +395,9 @@ class VisitorController extends Controller
         }
 
         $visit = $visitor->visits()->create([
-            'user_id' => $request->user()->id ?? 1,
+            // 'user_id' => $request->user()->id ?? 1,
             'visit_date' => $request->visit_date,
-            'check_in_time' => null,
+            'check_in_time' => now(),
             'check_out_time' => null,
             'notes' => $request->notes,
         ]);
@@ -427,9 +424,9 @@ class VisitorController extends Controller
             });
 
         // If user is a host, only show their visitors' activities
-        if ($request->user()->role === 'host') {
-            $visitorQuery->where('user_id', $request->user()->id);
-        }
+        // if ($request->user()->role === 'host') {
+        //     $visitorQuery->where('user_id', $request->user()->id);
+        // }
 
         $visitorActivities = $visitorQuery->latest()->limit(10)->get()->map(function ($visitor) {
             $activities = [];
@@ -466,9 +463,9 @@ class VisitorController extends Controller
             });
 
         // If user is a host, only show their visits' activities
-        if ($request->user()->role === 'host') {
-            $visitQuery->where('user_id', $request->user()->id);
-        }
+        // if ($request->user()->role === 'host') {
+        //     $visitQuery->where('user_id', $request->user()->id);
+        // }
 
         $visitActivities = $visitQuery->latest()->limit(10)->get()->map(function ($visit) {
             $activities = [];

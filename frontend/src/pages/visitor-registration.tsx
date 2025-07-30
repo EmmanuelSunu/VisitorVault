@@ -22,8 +22,16 @@ import { Label } from "@/components/ui/label";
 // Step schemas for wizard form
 const returningVisitorSchema = z.object({
   isReturning: z.enum(['yes', 'no']),
-  email: z.string().email("Valid email is required").optional(),
-  phone: z.string().min(1, "Phone number is required").optional(),
+  search: z.string().optional()
+}).refine((data) => {
+  // Only require search if isReturning is 'yes'
+  if (data.isReturning === 'yes') {
+    return !!data.search?.trim();
+  }
+  return true;
+}, {
+  message: "Please enter your email or phone number",
+  path: ["search"]
 });
 
 const basicDetailsSchema = z.object({
@@ -82,14 +90,14 @@ export default function VisitorRegistration() {
 
   // Mutation for finding existing visitor
   const findVisitorMutation = useMutation({
-    mutationFn: async (data: { email?: string; phone?: string }) => {
+    mutationFn: async (data: { search: string }) => {
       const response = await api.post('/visitor/find-by-email-or-phone', data);
       return response.data;
     },
     onSuccess: (data) => {
       // Pre-fill the form with existing visitor data
       setFormData({
-        id: data.id, // Make sure to include the ID
+        id: data.id,
         firstName: data.firstName,
         lastName: data.lastName,
         email: data.email,
@@ -100,7 +108,7 @@ export default function VisitorRegistration() {
         hostName: data.hostName,
         hostEmail: data.hostEmail,
         hostPhone: data.hostPhone,
-        purpose: 'Return Visit', // Add a default purpose for returning visitors
+        purpose: 'Return Visit',
       });
       setSelfiePhoto(data.photoUrl);
       setIdPhoto(data.idPhotoUrl);
@@ -129,12 +137,23 @@ export default function VisitorRegistration() {
 
   // Handle returning visitor form submission
   const onSubmitReturningVisitor = (data: z.infer<typeof returningVisitorSchema>) => {
-    if (data.isReturning === 'yes' && (data.email || data.phone)) {
+    if (data.isReturning === 'yes') {
+      if (!data.search?.trim()) {
+        toast({
+          title: 'Search Required',
+          description: 'Please enter your email or phone number',
+          variant: 'destructive',
+        });
+        return;
+      }
       findVisitorMutation.mutate({
-        email: data.email,
-        phone: data.phone,
+        search: data.search,
       });
     } else {
+      // Clear any existing form data when starting as new visitor
+      setFormData({});
+      setSelfiePhoto(null);
+      setIdPhoto(null);
       setStep(1); // Proceed to new visitor registration
     }
   };
@@ -232,7 +251,7 @@ export default function VisitorRegistration() {
   };
 
   const handleReset = () => {
-    setStep(1);
+    setStep(0);
     setFormData({});
     setSelfiePhoto(null);
     setIdPhoto(null);
@@ -378,89 +397,7 @@ export default function VisitorRegistration() {
 
   const progressValue = (step / 6) * 100;
 
-  // Render returning visitor form
-  // if (step === 0) {
-  //   return (
-  //     <Card className="w-full max-w-2xl mx-auto">
-  //       <CardHeader>
-  //         <CardTitle className="text-2xl font-bold text-center">Welcome to Visitor Registration</CardTitle>
-  //       </CardHeader>
-  //       <CardContent>
-  //         <Form {...returningVisitorForm}>
-  //           <form onSubmit={returningVisitorForm.handleSubmit(onSubmitReturningVisitor)} className="space-y-6">
-  //             <FormField
-  //               control={returningVisitorForm.control}
-  //               name="isReturning"
-  //               render={({ field }) => (
-  //                 <FormItem className="space-y-3">
-  //                   <FormLabel>Have you visited before?</FormLabel>
-  //                   <FormControl>
-  //                     <RadioGroup
-  //                       onValueChange={field.onChange}
-  //                       defaultValue={field.value}
-  //                       className="flex flex-col space-y-1"
-  //                     >
-  //                       <div className="flex items-center space-x-2">
-  //                         <RadioGroupItem value="yes" id="yes" />
-  //                         <Label htmlFor="yes">Yes, I have visited before</Label>
-  //                       </div>
-  //                       <div className="flex items-center space-x-2">
-  //                         <RadioGroupItem value="no" id="no" />
-  //                         <Label htmlFor="no">No, I am a new visitor</Label>
-  //                       </div>
-  //                     </RadioGroup>
-  //                   </FormControl>
-  //                   <FormMessage />
-  //                 </FormItem>
-  //               )}
-  //             />
 
-  //             {returningVisitorForm.watch("isReturning") === "yes" && (
-  //               <div className="space-y-4">
-  //                 <FormField
-  //                   control={returningVisitorForm.control}
-  //                   name="email"
-  //                   render={({ field }) => (
-  //                     <FormItem>
-  //                       <FormLabel>Email</FormLabel>
-  //                       <FormControl>
-  //                         <Input placeholder="Enter your email" {...field} />
-  //                       </FormControl>
-  //                       <FormMessage />
-  //                     </FormItem>
-  //                   )}
-  //                 />
-
-  //                 <div className="text-center text-sm text-gray-500">- OR -</div>
-
-  //                 <FormField
-  //                   control={returningVisitorForm.control}
-  //                   name="phone"
-  //                   render={({ field }) => (
-  //                     <FormItem>
-  //                       <FormLabel>Phone Number</FormLabel>
-  //                       <FormControl>
-  //                         <Input placeholder="Enter your phone number" {...field} />
-  //                       </FormControl>
-  //                       <FormMessage />
-  //                     </FormItem>
-  //                   )}
-  //                 />
-  //               </div>
-  //             )}
-
-  //             <div className="flex justify-end space-x-2">
-  //               <Button type="submit" disabled={findVisitorMutation.isPending}>
-  //                 {findVisitorMutation.isPending ? "Checking..." : "Continue"}
-  //                 <ArrowRight className="w-4 h-4 ml-2" />
-  //               </Button>
-  //             </div>
-  //           </form>
-  //         </Form>
-  //       </CardContent>
-  //     </Card>
-  //   );
-  // }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -559,37 +496,22 @@ export default function VisitorRegistration() {
                 />
   
                 {returningVisitorForm.watch("isReturning") === "yes" && (
-                  <div className="space-y-4">
-                    <FormField
-                      control={returningVisitorForm.control}
-                      name="email"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Email</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Enter your email" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-  
-                    <div className="text-center text-sm text-gray-500">- OR -</div>
-  
-                    <FormField
-                      control={returningVisitorForm.control}
-                      name="phone"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Phone Number</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Enter your phone number" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
+                  <FormField
+                    control={returningVisitorForm.control}
+                    name="search"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Email or Phone Number</FormLabel>
+                        <FormControl>
+                          <Input 
+                            placeholder="Enter your email or phone number" 
+                            {...field} 
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 )}
   
                 <div className="flex justify-end space-x-2">
@@ -601,7 +523,7 @@ export default function VisitorRegistration() {
               </form>
             </Form>
           </CardContent>
-          </Card>
+        </Card>
         )}
 
         {/* Step 1: Combined Details */}
