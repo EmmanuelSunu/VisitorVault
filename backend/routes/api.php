@@ -21,6 +21,8 @@ Route::post('/register', [UserController::class, 'register']);
 
 // Public visitor registration
 Route::post('/visitor/register', [VisitorController::class, 'store']);
+Route::post('/visitor/find-by-email-or-phone', [VisitorController::class, 'findByEmailOrPhone']);
+Route::post('/visitor/{visitor}/create-visit', [VisitorController::class, 'createVisit']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [UserController::class, 'logout']);

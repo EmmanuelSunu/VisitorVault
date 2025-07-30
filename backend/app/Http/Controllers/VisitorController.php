@@ -61,15 +61,21 @@ class VisitorController extends Controller
             'id_type' => 'required|string|max:255',
             'id_number' => 'required|string|max:255',
             'visit_date' => 'required|date',
-            'pic' => 'required|string', // Base64 encoded image
-            'id_pic' => 'required|string', // Base64 encoded image
+            'pic' => 'nullable|string', // Make selfie photo optional
+            'id_pic' => 'nullable|string', // Make ID photo optional
         ]);
 
-        // Handle selfie image
-        $selfieImage = $this->saveBase64Image($request->pic, 'selfies');
+        // Handle selfie image if provided
+        $selfieImage = null;
+        if ($request->pic) {
+            $selfieImage = $this->saveBase64Image($request->pic, 'selfies');
+        }
 
-        // Handle ID image
-        $idImage = $this->saveBase64Image($request->id_pic, 'ids');
+        // Handle ID image if provided
+        $idImage = null;
+        if ($request->id_pic) {
+            $idImage = $this->saveBase64Image($request->id_pic, 'ids');
+        }
 
         $visitor = Visitor::create([
             ...$request->except(['pic', 'id_pic']),
@@ -78,13 +84,13 @@ class VisitorController extends Controller
             'status' => 'pending'
         ]);
 
-        $visitor->visits()->create([
-            'user_id' => $request->user()->id ?? 1,
-            'visit_date' => $request->visit_date,
-            'check_in_time' => null,
-            'check_out_time' => null,
-            'notes' => $request->notes,
-        ]);
+        // $visitor->visits()->create([
+        //     'user_id' => $request->user()->id ?? 1,
+        //     'visit_date' => $request->visit_date,
+        //     'check_in_time' => null,
+        //     'check_out_time' => null,
+        //     'notes' => $request->notes,
+        // ]);
 
         return response()->json($visitor, 201);
     }
@@ -329,7 +335,78 @@ class VisitorController extends Controller
         ]);
     }
 
+    /**
+     * Find visitor by email or phone number
+     */
+    public function findByEmailOrPhone(Request $request)
+    {
+        $request->validate([
+            'search' => 'required|string|max:255',
+        ]);
+
+        $searchTerm = $request->search;
+
+        $query = Visitor::query()
+            ->where(function ($q) use ($searchTerm) {
+                $q->where('email', 'like', "%{$searchTerm}%")
+                    ->orWhere('phone', 'like', "%{$searchTerm}%");
+            })
+            ->where('status', 'approved')
+            ->with(['host', 'visits'])
+            ->latest()
+            ->first();
+
+        if (!$query) {
+            return response()->json(['message' => 'Visitor not found'], 404);
+        }
+
+        return response()->json([
+            'id' => $query->id,
+            'firstName' => $query->f_name,
+            'lastName' => $query->l_name,
+            'email' => $query->email,
+            'phone' => $query->phone,
+            'company' => $query->company,
+            'idType' => $query->id_type,
+            'idNumber' => $query->id_number,
+            'hostName' => $query->h_name,
+            'hostEmail' => $query->h_email,
+            'hostPhone' => $query->h_phone,
+            'photoUrl' => $this->getImageUrl($query->pic),
+            'idPhotoUrl' => $this->getImageUrl($query->id_pic),
+        ]);
+    }
+
     // Check-in and check-out methods moved to VisitController
+
+    /**
+     * Create a visit for an existing visitor
+     */
+    public function createVisit(Request $request, Visitor $visitor)
+    {
+        $request->validate([
+            'visit_date' => 'required|date',
+            'notes' => 'nullable|string',
+        ]);
+
+        // Check if visitor is approved
+        if ($visitor->status !== 'approved') {
+            return response()->json(['message' => 'Visitor is not approved'], 403);
+        }
+
+        $visit = $visitor->visits()->create([
+            // 'user_id' => $request->user()->id ?? 1,
+            'visit_date' => $request->visit_date,
+            'check_in_time' => now(),
+            'check_out_time' => null,
+            'notes' => $request->notes,
+        ]);
+
+        return response()->json([
+            'message' => 'Visit created successfully',
+            'visit' => $visit->load('visitor', 'host'),
+        ], 201);
+    }
 
     /**
      * Get recent visitor activity logs
@@ -347,9 +424,9 @@ class VisitorController extends Controller
             });
 
         // If user is a host, only show their visitors' activities
-        if ($request->user()->role === 'host') {
-            $visitorQuery->where('user_id', $request->user()->id);
-        }
+        // if ($request->user()->role === 'host') {
+        //     $visitorQuery->where('user_id', $request->user()->id);
+        // }
 
         $visitorActivities = $visitorQuery->latest()->limit(10)->get()->map(function ($visitor) {
             $activities = [];
@@ -386,9 +463,9 @@ class VisitorController extends Controller
             });
 
         // If user is a host, only show their visits' activities
-        if ($request->user()->role === 'host') {
-            $visitQuery->where('user_id', $request->user()->id);
-        }
+        // if ($request->user()->role === 'host') {
+        //     $visitQuery->where('user_id', $request->user()->id);
+        // }
 
         $visitActivities = $visitQuery->latest()->limit(10)->get()->map(function ($visit) {
             $activities = [];
