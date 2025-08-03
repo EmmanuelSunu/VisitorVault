@@ -185,9 +185,9 @@ export default function QrDisplayModal({
             <p className="text-gray-600">
               Badge Number: <span className="font-mono font-medium">{badgeNumber}</span>
             </p>
-            <p className="text-sm text-gray-500">
+            {/* <p className="text-sm text-gray-500">
               Please present this QR code at reception for check-in
-            </p>
+            </p> */}
           </div>
 
           {/* Status Information */}

@@ -20,6 +20,9 @@ return new class extends Migration
             $table->timestamp('check_out_time')->nullable();
             $table->text('notes')->nullable();
             $table->string('badge_number')->nullable();
+            $table->string('h_name')->nullable();
+            $table->string('h_email')->nullable();
+            $table->string('h_phone')->nullable();
             $table->timestamps();
         });
     }

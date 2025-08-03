@@ -48,51 +48,63 @@ class VisitorController extends Controller
      */
     public function store(Request $request)
     {
-        $request->validate([
-            'f_name' => 'required|string|max:255',
-            'l_name' => 'required|string|max:255',
-            'purpose' => 'required|string|max:255',
-            'phone' => 'required|string|max:20',
-            'email' => 'required|email|max:255',
-            'company' => 'nullable|string|max:255',
-            'h_name' => 'required|string|max:255',
-            'h_email' => 'required|email|max:255',
-            'h_phone' => 'required|string|max:20',
-            'id_type' => 'required|string|max:255',
-            'id_number' => 'required|string|max:255',
-            'visit_date' => 'required|date',
-            'pic' => 'nullable|string', // Make selfie photo optional
-            'id_pic' => 'nullable|string', // Make ID photo optional
-        ]);
+        try {
+            $request->validate([
+                'f_name' => 'required|string|max:255',
+                'l_name' => 'required|string|max:255',
+                'purpose' => 'required|string|max:255',
+                'phone' => 'required|string|max:20|unique:visitors',
+                'email' => 'nullable|email|max:255',
+                'company' => 'nullable|string|max:255',
+                'h_name' => 'required|string|max:255',
+                'h_email' => 'nullable|email|max:255',
+                'h_phone' => 'required|string|max:20',
+                'id_type' => 'required|string|max:255',
+                'id_number' => 'required|string|max:255',
+                'visit_date' => 'required|date',
+                'pic' => 'nullable|string', // Make selfie photo optional
+                'id_pic' => 'nullable|string', // Make ID photo optional
+            ]);
 
-        // Handle selfie image if provided
-        $selfieImage = null;
-        if ($request->pic) {
-            $selfieImage = $this->saveBase64Image($request->pic, 'selfies');
+            // Handle selfie image if provided
+            $selfieImage = null;
+            if ($request->pic) {
+                $selfieImage = $this->saveBase64Image($request->pic, 'selfies');
+            }
+
+            // Handle ID image if provided
+            $idImage = null;
+            if ($request->id_pic) {
+                $idImage = $this->saveBase64Image($request->id_pic, 'ids');
+            }
+
+            $visitor = Visitor::create([
+                ...$request->except(['pic', 'id_pic']),
+                'pic' => $selfieImage,
+                'id_pic' => $idImage,
+                'status' => 'pending'
+            ]);
+
+            // $visitor->visits()->create([
+            //     'user_id' => $request->user()->id ?? 1,
+            //     'visit_date' => $request->visit_date,
+            //     'check_in_time' => null,
+            //     'check_out_time' => null,
+            //     'notes' => $request->notes,
+            // ]);
+
+            return response()->json($visitor, 201);
+        } catch (\Illuminate\Database\QueryException $e) {
+            if ($e->errorInfo[1] === 19) { // SQLite unique constraint error code
+                return response()->json([
+                    'message' => 'A visitor with this phone number already exists in our system. Please use a different phone number or try the returning visitor option.',
+                    'errors' => [
+                        'phone' => ['This phone number is already registered']
+                    ]
+                ], 422);
+            }
+            throw $e;
         }
-
-        // Handle ID image if provided
-        $idImage = null;
-        if ($request->id_pic) {
-            $idImage = $this->saveBase64Image($request->id_pic, 'ids');
-        }
-
-        $visitor = Visitor::create([
-            ...$request->except(['pic', 'id_pic']),
-            'pic' => $selfieImage,
-            'id_pic' => $idImage,
-            'status' => 'pending'
-        ]);
-
-        // $visitor->visits()->create([
-        //     'user_id' => $request->user()->id ?? 1,
-        //     'visit_date' => $request->visit_date,
-        //     'check_in_time' => null,
-        //     'check_out_time' => null,
-        //     'notes' => $request->notes,
-        // ]);
-
-        return response()->json($visitor, 201);
     }
 
     /**
