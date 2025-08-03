@@ -41,17 +41,23 @@ const basicDetailsSchema = z.object({
 });
 
 const contactDetailsSchema = z.object({
-  email: z.string().email("Valid email is required"),
-  phone: z.string().min(1, "Phone number is required"),
+  email: z.string().email("Valid email is required").optional().or(z.literal('')),
+  phone: z.string()
+    .min(1, "Phone number is required")
+    .regex(/^\+?[0-9]{10,}$/, "Phone number must be at least 10 digits and can start with +"),
   company: z.string().optional(),
-  hostName: z.string().min(1, "Host/Reception name is required"),
-  hostEmail: z.string().email("Valid host email is required"),
-  hostPhone: z.string().min(1, "Host phone number is required"),
+  hostName: z.string().min(1, "Host (Person or Company) is required"),
+  hostEmail: z.string().email("Valid host email is required").optional().or(z.literal('')),
+  hostPhone: z.string()
+  .min(1, "Phone number is required")
+  .regex(/^\+?[0-9]{10,}$/, "Phone number must be at least 10 digits and can start with +"),
 });
 
 const idDetailsSchema = z.object({
   idType: z.string().min(1, "ID type is required"),
-  idNumber: z.string().min(1, "ID number is required"),
+  idNumber: z.string()
+    .min(1, "ID number is required")
+    .regex(/^[0-9.-]+$/, "ID number can only contain numbers, dots and dashes"),
 });
 
 const completeSchema = basicDetailsSchema.merge(contactDetailsSchema).merge(idDetailsSchema).extend({
@@ -600,14 +606,14 @@ export default function VisitorRegistration() {
                   />
                   {/* Email, Phone, Company */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <FormField
+                  <FormField
                       control={combinedForm.control}
-                      name="email"
+                      name="phone"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Email Address</FormLabel>
+                          <FormLabel>Phone Number</FormLabel>
                           <FormControl>
-                            <Input type="email" placeholder="john.doe@company.com" {...field} />
+                            <Input placeholder="+233 30 123 4567" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -615,12 +621,12 @@ export default function VisitorRegistration() {
                     />
                     <FormField
                       control={combinedForm.control}
-                      name="phone"
+                      name="email"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Phone Number</FormLabel>
+                          <FormLabel>Email Address (Optional)</FormLabel>
                           <FormControl>
-                            <Input placeholder="+1 (555) 123-4567" {...field} />
+                            <Input type="email" placeholder="kwame.alhasan@company.com" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -647,9 +653,9 @@ export default function VisitorRegistration() {
                       name="hostName"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Host/Reception Name</FormLabel>
+                          <FormLabel>Host (Person or Company)</FormLabel>
                           <FormControl>
-                            <Input placeholder="Host/Reception name" {...field} />
+                            <Input placeholder="Host (Person or Company)" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -660,7 +666,7 @@ export default function VisitorRegistration() {
                       name="hostEmail"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Host/Reception Email</FormLabel>
+                          <FormLabel>Host (Person or Company) Email</FormLabel>
                           <FormControl>
                             <Input type="email" placeholder="host@company.com" {...field} />
                           </FormControl>
@@ -673,9 +679,9 @@ export default function VisitorRegistration() {
                       name="hostPhone"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Host/Reception Phone</FormLabel>
+                          <FormLabel>Host (Person or Company) Phone</FormLabel>
                           <FormControl>
-                            <Input placeholder="+1 (555) 123-4567" {...field} />
+                            <Input placeholder="+233 30 123 4567" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -915,15 +921,15 @@ export default function VisitorRegistration() {
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
-                        <p className="text-sm text-gray-500">Host/Reception Name</p>
+                        <p className="text-sm text-gray-500">Host (Person or Company)</p>
                         <p className="font-medium">{formData.hostName}</p>
                       </div>
                       <div>
-                        <p className="text-sm text-gray-500">Host/Reception Email</p>
+                        <p className="text-sm text-gray-500">Host (Person or Company) Email</p>
                         <p className="font-medium">{formData.hostEmail}</p>
                       </div>
                       <div>
-                        <p className="text-sm text-gray-500">Host/Reception Phone</p>
+                        <p className="text-sm text-gray-500">Host (Person or Company) Phone</p>
                         <p className="font-medium">{formData.hostPhone}</p>
                       </div>
                       <div>
@@ -1026,14 +1032,14 @@ export default function VisitorRegistration() {
                   <p className="text-gray-600">
                     Badge Number: {registrationResult?.badgeNumber || 'VIS' + Date.now()}
                   </p>
-                  <p className="text-sm text-gray-500">
+                  {/* <p className="text-sm text-gray-500">
                     Please present this QR code at reception for check-in
-                  </p>
+                  </p> */}
                 </div>
 
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
                   <p className="text-amber-800 text-sm">
-                    <strong>Status:</strong> Pending reception approval. You will receive an email notification once approved.
+                    <strong>Status:</strong> Pending reception approval. 
                   </p>
                 </div>
 
