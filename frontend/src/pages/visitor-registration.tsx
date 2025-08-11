@@ -86,6 +86,15 @@ export default function VisitorRegistration() {
 
   const { api, user } = useAuth();
 
+  // Fetch companies for the dropdown
+  const { data: companies = [] } = useQuery({
+    queryKey: ["/api/companies"],
+    queryFn: async () => {
+      const response = await api.get("/companies");
+      return response.data;
+    },
+  });
+
   // Form for returning visitor check
   const returningVisitorForm = useForm<z.infer<typeof returningVisitorSchema>>({
     resolver: zodResolver(returningVisitorSchema),
@@ -638,9 +647,20 @@ export default function VisitorRegistration() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Company (Optional)</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Your company name" {...field} />
-                          </FormControl>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select your company" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {companies.map((company: any) => (
+                                <SelectItem key={company.id} value={company.name}>
+                                  {company.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                           <FormMessage />
                         </FormItem>
                       )}
