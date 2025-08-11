@@ -37,6 +37,16 @@ import {
 } from "lucide-react";
 import { AxiosError } from "axios";
 
+// Form schema for company creation/editing
+const companyFormSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  address: z.string().optional(),
+  contact_person: z.string().optional(),
+  contact_email: z.string().email("Invalid email address").optional(),
+  contact_phone: z.string().optional(),
+  notes: z.string().optional(),
+});
+
 // Form schema for user creation/editing
 const userFormSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -77,11 +87,13 @@ export default function AdminPanel() {
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isUserFormOpen, setIsUserFormOpen] = useState(false);
+  const [isCompanyFormOpen, setIsCompanyFormOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
+  const [editingCompany, setEditingCompany] = useState<any>(null);
 
-  // Form setup
-  const form = useForm<z.infer<typeof userFormSchema>>({
+  // User form setup
+  const userForm = useForm<z.infer<typeof userFormSchema>>({
     resolver: zodResolver(userFormSchema),
     defaultValues: {
       name: "",
@@ -90,23 +102,56 @@ export default function AdminPanel() {
     },
   });
 
-  // Reset form when dialog closes
+  // Company form setup
+  const companyForm = useForm<z.infer<typeof companyFormSchema>>({
+    resolver: zodResolver(companyFormSchema),
+    defaultValues: {
+      name: "",
+      address: "",
+      contact_person: "",
+      contact_email: "",
+      contact_phone: "",
+      notes: "",
+    },
+  });
+
+  // Reset forms when dialogs close
   useEffect(() => {
-    if (!isFormOpen && !editingUser) {
-      form.reset();
+    if (!isUserFormOpen && !editingUser) {
+      userForm.reset();
     }
-  }, [isFormOpen, editingUser, form]);
+  }, [isUserFormOpen, editingUser, userForm]);
+
+  useEffect(() => {
+    if (!isCompanyFormOpen && !editingCompany) {
+      companyForm.reset();
+    }
+  }, [isCompanyFormOpen, editingCompany, companyForm]);
 
   // Set form values when editing user
   useEffect(() => {
     if (editingUser) {
-      form.reset({
+      userForm.reset({
         name: editingUser.name,
         email: editingUser.email,
         role: editingUser.role
       });
     }
-  }, [editingUser, form]);
+  }, [editingUser, userForm]);
+
+  // Set form values when editing company
+  useEffect(() => {
+    if (editingCompany) {
+      companyForm.reset({
+        name: editingCompany.name,
+        address: editingCompany.address || "",
+        contact_person: editingCompany.contact_person || "",
+        contact_email: editingCompany.contact_email || "",
+        contact_phone: editingCompany.contact_phone || "",
+        notes: editingCompany.notes || "",
+      });
+    }
+  }, [editingCompany, companyForm]);
 
   // Redirect if not authenticated or not admin
   useEffect(() => {
@@ -149,6 +194,143 @@ export default function AdminPanel() {
     weekly_total: 0,
   };
 
+  // Fetch all companies
+  const { data: allCompanies = [], isLoading: loadingCompanies } = useQuery({
+    queryKey: ["/api/companies"],
+    queryFn: async () => {
+      const response = await api.get("/companies");
+      return response.data;
+    },
+    enabled: isAuthenticated && user?.role === 'admin',
+  });
+
+  // Create company mutation
+  const createCompanyMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof companyFormSchema>) => {
+      const response = await api.post("/companies", data);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/companies"] });
+      toast({ title: "Success", description: "Company created successfully" });
+      setIsCompanyFormOpen(false);
+      companyForm.reset();
+    },
+    onError: (error: AxiosError<ApiErrorResponse>) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to create company",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Update company mutation
+  const updateCompanyMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: z.infer<typeof companyFormSchema> }) => {
+      const response = await api.put(`/companies/${id}`, data);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/companies"] });
+      toast({ title: "Success", description: "Company updated successfully" });
+      setEditingCompany(null);
+      setIsCompanyFormOpen(false);
+      companyForm.reset();
+    },
+    onError: (error: AxiosError<ApiErrorResponse>) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to update company",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Delete company mutation
+  const deleteCompanyMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await api.delete(`/companies/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/companies"] });
+      toast({ title: "Success", description: "Company deleted successfully" });
+    },
+    onError: (error: AxiosError<ApiErrorResponse>) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to delete company",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleCompanySubmit = async (data: z.infer<typeof companyFormSchema>) => {
+    if (editingCompany) {
+      await updateCompanyMutation.mutateAsync({ id: editingCompany.id, data });
+    } else {
+      await createCompanyMutation.mutateAsync(data);
+    }
+  };
+
+  const handleDeleteCompany = async (companyId: string) => {
+    if (window.confirm("Are you sure you want to delete this company?")) {
+      await deleteCompanyMutation.mutateAsync(companyId);
+    }
+  };
+
+  const handleEditCompany = (company: any) => {
+    setEditingCompany(company);
+    setIsCompanyFormOpen(true);
+    companyForm.reset({
+      name: company.name,
+      address: company.address || "",
+      contact_person: company.contact_person || "",
+      contact_email: company.contact_email || "",
+      contact_phone: company.contact_phone || "",
+      notes: company.notes || "",
+    });
+  };
+
+  const handleCloseCompanyForm = () => {
+    setIsCompanyFormOpen(false);
+    setEditingCompany(null);
+    companyForm.reset();
+  };
+
   // Fetch all users with filters
   const { data: allUsers = [], isLoading: loadingUsers } = useQuery({
     queryKey: ["/api/users", roleFilter, statusFilter, searchQuery],
@@ -183,8 +365,8 @@ export default function AdminPanel() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
       toast({ title: "Success", description: "User created successfully" });
-      setIsFormOpen(false);
-      form.reset();
+      setIsUserFormOpen(false);
+      userForm.reset();
     },
     onError: (error: AxiosError<ApiErrorResponse>) => {
       if (isUnauthorizedError(error)) {
@@ -216,8 +398,8 @@ export default function AdminPanel() {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
       toast({ title: "Success", description: "User updated successfully" });
       setEditingUser(null);
-      setIsFormOpen(false);
-      form.reset();
+      setIsUserFormOpen(false);
+      userForm.reset();
     },
     onError: (error: AxiosError<ApiErrorResponse>) => {
       if (isUnauthorizedError(error)) {
@@ -318,8 +500,8 @@ export default function AdminPanel() {
 
   const handleEditUser = (user: any) => {
     setEditingUser(user);
-    setIsFormOpen(true);
-    form.reset({
+    setIsUserFormOpen(true);
+    userForm.reset({
       name: user.name,
       email: user.email,
       role: user.role
@@ -327,9 +509,9 @@ export default function AdminPanel() {
   };
 
   const handleCloseForm = () => {
-    setIsFormOpen(false);
+    setIsUserFormOpen(false);
     setEditingUser(null);
-    form.reset();
+    userForm.reset();
   };
 
   if (isLoading) {
@@ -379,10 +561,10 @@ export default function AdminPanel() {
                 <Users className="h-4 w-4" />
                 <span>User Management</span>
               </TabsTrigger>
-              {/* <TabsTrigger value="locations" className="flex items-center space-x-2">
+              <TabsTrigger value="companies" className="flex items-center space-x-2">
                 <Building className="h-4 w-4" />
-                <span>Locations</span>
-              </TabsTrigger> */}
+                <span>Company Management</span>
+              </TabsTrigger>
               {/* <TabsTrigger value="settings" className="flex items-center space-x-2">
                 <Settings className="h-4 w-4" />
                 <span>Settings</span>
@@ -556,16 +738,16 @@ export default function AdminPanel() {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle>User Management</CardTitle>
-                  <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
+                  <Dialog open={isUserFormOpen} onOpenChange={setIsUserFormOpen}>
                     <DialogTrigger asChild>
                       <Button onClick={() => {
                         setEditingUser(null);
-                        form.reset({
+                        userForm.reset({
                           name: "",
                           email: "",
                           role: "host",
                         });
-                        setIsFormOpen(true);
+                        setIsUserFormOpen(true);
                       }}>
                         <UserPlus className="mr-2 h-4 w-4" />
                         Add User
@@ -575,10 +757,10 @@ export default function AdminPanel() {
                       <DialogHeader>
                         <DialogTitle>{editingUser ? "Edit User" : "Add New User"}</DialogTitle>
                       </DialogHeader>
-                      <Form {...form}>
-                        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                      <Form {...userForm}>
+                        <form onSubmit={userForm.handleSubmit(onSubmit)} className="space-y-4">
                           <FormField
-                            control={form.control}
+                            control={userForm.control}
                             name="name"
                             render={({ field }) => (
                               <FormItem>
@@ -591,7 +773,7 @@ export default function AdminPanel() {
                             )}
                           />
                           <FormField
-                            control={form.control}
+                            control={userForm.control}
                             name="email"
                             render={({ field }) => (
                               <FormItem>
@@ -605,7 +787,7 @@ export default function AdminPanel() {
                           />
                           {!editingUser && (
                             <FormField
-                              control={form.control}
+                              control={userForm.control}
                               name="password"
                               render={({ field }) => (
                                 <FormItem>
@@ -619,7 +801,7 @@ export default function AdminPanel() {
                             />
                           )}
                           <FormField
-                            control={form.control}
+                            control={userForm.control}
                             name="role"
                             render={({ field }) => (
                               <FormItem>
@@ -869,6 +1051,227 @@ export default function AdminPanel() {
                   <Building className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                   <p className="text-gray-600">Location management features coming soon.</p>
                 </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Company Management Tab */}
+          <TabsContent value="companies" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Company Management</CardTitle>
+                  <Dialog open={isCompanyFormOpen} onOpenChange={setIsCompanyFormOpen}>
+                    <DialogTrigger asChild>
+                      <Button onClick={() => {
+                        setEditingCompany(null);
+                        companyForm.reset({
+                          name: "",
+                          address: "",
+                          contact_person: "",
+                          contact_email: "",
+                          contact_phone: "",
+                          notes: "",
+                        });
+                        setIsCompanyFormOpen(true);
+                      }}>
+                        <Building className="mr-2 h-4 w-4" />
+                        Add Company
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>{editingCompany ? "Edit Company" : "Add New Company"}</DialogTitle>
+                      </DialogHeader>
+                      <Form {...companyForm}>
+                        <form onSubmit={companyForm.handleSubmit(handleCompanySubmit)} className="space-y-4">
+                          <FormField
+                            control={companyForm.control}
+                            name="name"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Company Name</FormLabel>
+                                <FormControl>
+                                  <Input {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={companyForm.control}
+                            name="address"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Address</FormLabel>
+                                <FormControl>
+                                  <Input {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={companyForm.control}
+                            name="contact_person"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Contact Person</FormLabel>
+                                <FormControl>
+                                  <Input {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={companyForm.control}
+                            name="contact_email"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Contact Email</FormLabel>
+                                <FormControl>
+                                  <Input type="email" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={companyForm.control}
+                            name="contact_phone"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Contact Phone</FormLabel>
+                                <FormControl>
+                                  <Input {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={companyForm.control}
+                            name="notes"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Notes</FormLabel>
+                                <FormControl>
+                                  <Input {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <div className="flex justify-end space-x-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={handleCloseCompanyForm}
+                            >
+                              Cancel
+                            </Button>
+                            <Button type="submit">
+                              {editingCompany ? "Update" : "Create"} Company
+                            </Button>
+                          </div>
+                        </form>
+                      </Form>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+              </CardHeader>
+              
+              <CardContent className="p-0">
+                {loadingCompanies ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                    <p className="text-gray-600">Loading companies...</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Company Name
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Contact Person
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Contact Info
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Address
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {allCompanies.map((company: any) => (
+                          <tr key={company.id} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm font-medium text-gray-900">
+                                {company.name}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-900">
+                                {company.contact_person || 'N/A'}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-900">
+                                {company.contact_email && (
+                                  <div className="flex items-center space-x-1">
+                                    <Mail className="h-4 w-4" />
+                                    <span>{company.contact_email}</span>
+                                  </div>
+                                )}
+                                {company.contact_phone && (
+                                  <div className="text-sm text-gray-500">
+                                    {company.contact_phone}
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-900">
+                                {company.address || 'N/A'}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEditCompany(company)}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDeleteCompany(company.id)}
+                              >
+                                <Trash2 className="h-4 w-4 text-red-500" />
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {allCompanies.length === 0 && !loadingCompanies && (
+                  <div className="text-center py-8">
+                    <Building className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-600">No companies found. Add your first company!</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
