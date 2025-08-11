@@ -3,6 +3,7 @@
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VisitorController;
 use App\Http\Controllers\VisitController;
+use App\Http\Controllers\CompanyController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -23,6 +24,7 @@ Route::post('/register', [UserController::class, 'register']);
 Route::post('/visitor/register', [VisitorController::class, 'store']);
 Route::post('/visitor/find-by-email-or-phone', [VisitorController::class, 'findByEmailOrPhone']);
 Route::post('/visitor/{visitor}/create-visit', [VisitorController::class, 'createVisit']);
+Route::get('/companies', [CompanyController::class, 'index']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [UserController::class, 'logout']);
@@ -67,4 +69,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/visits/{visit}', [VisitController::class, 'destroy']);
     Route::patch('/visits/{visit}/check-in', [VisitController::class, 'checkIn']);
     Route::patch('/visits/{visit}/check-out', [VisitController::class, 'checkOut']);
+
+    // Company management routes
+
+    Route::post('/companies', [CompanyController::class, 'store']);
+    Route::get('/companies/{company}', [CompanyController::class, 'show']);
+    Route::put('/companies/{company}', [CompanyController::class, 'update']);
+    Route::delete('/companies/{company}', [CompanyController::class, 'destroy']);
 });

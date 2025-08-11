@@ -46,11 +46,11 @@ const contactDetailsSchema = z.object({
     .min(1, "Phone number is required")
     .regex(/^\+?[0-9]{10,}$/, "Phone number must be at least 10 digits and can start with +"),
   company: z.string().optional(),
-  hostName: z.string().min(1, "Host (Person or Company) is required"),
-  hostEmail: z.string().email("Valid host email is required").optional().or(z.literal('')),
-  hostPhone: z.string()
-  .min(1, "Phone number is required")
-  .regex(/^\+?[0-9]{10,}$/, "Phone number must be at least 10 digits and can start with +"),
+  // hostName: z.string().min(1, "Host (Person or Company) is required"),
+  // hostEmail: z.string().email("Valid host email is required").optional().or(z.literal('')),
+  // hostPhone: z.string()
+  // .min(1, "Phone number is required")
+  // .regex(/^\+?[0-9]{10,}$/, "Phone number must be at least 10 digits and can start with +"),
 });
 
 const idDetailsSchema = z.object({
@@ -111,9 +111,9 @@ export default function VisitorRegistration() {
         company: data.company,
         idType: data.idType,
         idNumber: data.idNumber,
-        hostName: data.hostName,
-        hostEmail: data.hostEmail,
-        hostPhone: data.hostPhone,
+        // hostName: data.hostName,
+        // hostEmail: data.hostEmail,
+        // hostPhone: data.hostPhone,
         purpose: 'Return Visit',
       });
       setSelfiePhoto(data.photoUrl);
@@ -173,9 +173,9 @@ export default function VisitorRegistration() {
       email: string;
       phone: string;
       company?: string;
-      h_name: string;
-      h_email: string;
-      h_phone: string;
+      // h_name: string;
+      // h_email: string;
+      // h_phone: string;
       id_type: string;
       id_number: string;
       pic: string;
@@ -278,9 +278,9 @@ export default function VisitorRegistration() {
       email: formData.email || "",
       phone: formData.phone || "",
       company: formData.company || "",
-      hostName: formData.hostName || "",
-      hostEmail: formData.hostEmail || "",
-      hostPhone: formData.hostPhone || "",
+      // hostName: formData.hostName || "",
+      // hostEmail: formData.hostEmail || "",
+      // hostPhone: formData.hostPhone || "",
     },
   });
 
@@ -351,9 +351,9 @@ export default function VisitorRegistration() {
         email: formData.email!,
         phone: formData.phone!,
         company: formData.company,
-        h_name: formData.hostName!,
-        h_email: formData.hostEmail!,
-        h_phone: formData.hostPhone!,
+        // h_name: formData.hostName!,
+        // h_email: formData.hostEmail!,
+        // h_phone: formData.hostPhone!,
         id_type: formData.idType!,
         id_number: formData.idNumber!,
         pic: selfiePhoto || '', // Make photos optional
@@ -648,7 +648,7 @@ export default function VisitorRegistration() {
                   </div>
                   {/* Host/Reception Details */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <FormField
+                    {/* <FormField
                       control={combinedForm.control}
                       name="hostName"
                       render={({ field }) => (
@@ -660,8 +660,8 @@ export default function VisitorRegistration() {
                           <FormMessage />
                         </FormItem>
                       )}
-                    />
-                    <FormField
+                    /> */}
+                    {/* <FormField
                       control={combinedForm.control}
                       name="hostEmail"
                       render={({ field }) => (
@@ -673,8 +673,8 @@ export default function VisitorRegistration() {
                           <FormMessage />
                         </FormItem>
                       )}
-                    />
-                    <FormField
+                    /> */}
+                    {/* <FormField
                       control={combinedForm.control}
                       name="hostPhone"
                       render={({ field }) => (
@@ -686,7 +686,7 @@ export default function VisitorRegistration() {
                           <FormMessage />
                         </FormItem>
                       )}
-                    />
+                    /> */}
                   </div>
                   <div className="flex justify-end pt-4">
                     <Button type="submit" className="w-full sm:w-auto">
@@ -920,18 +920,18 @@ export default function VisitorRegistration() {
                       <p className="font-medium">{formData.purpose}</p>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
+                      {/* <div>
                         <p className="text-sm text-gray-500">Host (Person or Company)</p>
                         <p className="font-medium">{formData.hostName}</p>
-                      </div>
-                      <div>
+                      </div> */}
+                      {/* <div>
                         <p className="text-sm text-gray-500">Host (Person or Company) Email</p>
                         <p className="font-medium">{formData.hostEmail}</p>
                       </div>
                       <div>
                         <p className="text-sm text-gray-500">Host (Person or Company) Phone</p>
                         <p className="font-medium">{formData.hostPhone}</p>
-                      </div>
+                      </div> */}
                       <div>
                         <p className="text-sm text-gray-500">ID Type</p>
                         <p className="font-medium">{formData.idType}</p>
