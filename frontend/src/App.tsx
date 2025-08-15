@@ -45,7 +45,7 @@ function App() {
           rel="noopener noreferrer"
           className="text-blue-600 hover:underline font-medium"
         >
-          Desiderata Information Systems Limited
+          BethLog Information Systems Limited
         </a>
       </footer>
     </QueryClientProvider>

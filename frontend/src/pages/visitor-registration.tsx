@@ -425,7 +425,7 @@ export default function VisitorRegistration() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center py-4 space-y-2 sm:space-y-0">
             <div className="flex-1">
-              <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Desiderata Visitor Management System</h1>
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900">BethLog Visitor Management System</h1>
               <p className="text-sm sm:text-base text-gray-600">Welcome! Please complete your registration below.</p>
             </div>
             {user ? (

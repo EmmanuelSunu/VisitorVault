@@ -2,7 +2,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Shield, Bell, LogOut, User } from "lucide-react";
+import { Bell, LogOut, User } from "lucide-react";
+import logo from "../assets/images/logo.png";
 
 export default function Header() {
   const { user, isAuthenticated, logout } = useAuth();
@@ -12,6 +13,7 @@ export default function Header() {
   };
 
   const handleProfile = () => {
+    return;
     window.location.href = "/admin";
   };
 
@@ -28,11 +30,11 @@ export default function Header() {
           <div className="flex items-center space-x-4">
             <div className="flex-shrink-0">
               <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-                <Shield className="h-6 w-6 text-primary-foreground" />
+                <img src={logo} alt="Logo" className="w-full h-full object-contain" />
               </div>
             </div>
             <div>
-              <h1 className="text-xl font-semibold text-gray-900">Desiderata Visitor Management System</h1>
+              <h1 className="text-xl font-semibold text-gray-900">BethLog Visitor Management System</h1>
               <p className="text-sm text-gray-500">Visitor Management System</p>
             </div>
           </div>

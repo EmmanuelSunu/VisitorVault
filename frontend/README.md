@@ -9,7 +9,7 @@ A modern, mobile-friendly visitor management system built with React, TypeScript
 - **Reception Interface**: Easy check-in/check-out for visitors
 - **Admin Panel**: System management for admins
 - **Mobile Responsive**: Fully responsive design for phones, tablets, and desktops
-- **Global Footer**: Fixed footer with a link to Desiderata Information Systems Limited
+- **Global Footer**: Fixed footer with a link to BethLog Information Systems Limited
 
 ## Tech Stack
 
@@ -74,7 +74,7 @@ VisitorVault/
 
 ## Footer
 
-- A global footer is fixed at the bottom of the app, containing a hyperlink to [Desiderata Information Systems Limited](https://desiderata.com).
+- A global footer is fixed at the bottom of the app, containing a hyperlink to [BethLog Information Systems Limited](https://desiderata.com).
 
 ## Customization
 
@@ -87,4 +87,4 @@ For issues and questions, please create an issue in the repository or contact th
 
 ---
 
-© Desiderata Information Systems Limited 
+© BethLog Information Systems Limited 
