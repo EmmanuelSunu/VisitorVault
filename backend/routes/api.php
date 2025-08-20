@@ -4,6 +4,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\VisitorController;
 use App\Http\Controllers\VisitController;
 use App\Http\Controllers\CompanyController;
+use App\Http\Controllers\TestSmtpController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -11,9 +12,8 @@ Route::get('/user', function (Request $request) {
     return $request->user();
 })->middleware('auth:sanctum');
 
-Route::get('/test', function (Request $request) {
-    return ['asfafa'];
-});
+Route::get('/test-email', [VisitorController::class, 'testEmail']);
+Route::get('/test-smtp', [TestSmtpController::class, 'testSmtp']);
 
 
 // Auth routes

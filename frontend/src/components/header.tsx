@@ -34,8 +34,8 @@ export default function Header() {
               </div>
             </div>
             <div>
-              <h1 className="text-xl font-semibold text-gray-900">BethLog Visitor Management System</h1>
-              <p className="text-sm text-gray-500">Visitor Management System</p>
+              <h1 className="text-xl font-semibold text-gray-900">Desiderata Visitor Management System</h1>
+              {/* <p className="text-sm text-gray-500">Welcome! Please complete your registration below.</p> */}
             </div>
           </div>
           
@@ -79,7 +79,7 @@ export default function Header() {
                 </DropdownMenu>
               </>
             ) : (
-              <Button onClick={() => window.location.href = "/api/login"}>
+              <Button className="hidden md:block" onClick={() => window.location.href = "/api/login"}>
                 Sign In
               </Button>
             )}

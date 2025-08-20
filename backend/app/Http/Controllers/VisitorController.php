@@ -3,13 +3,42 @@
 namespace App\Http\Controllers;
 
 use App\Models\Visitor;
+use App\Notifications\VisitorStatusNotification;
+use Exception;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
 
 class VisitorController extends Controller
 {
+    public function testEmail()
+    {
+        try {
+            $to = 'komih31817@mardiek.com';
+            $subject = 'Test Email from PHP';
+            $message = 'This is a test email sent using PHP mail function.';
+            $headers = 'From: support@bethlog.desiderata.com.gh' . "\r\n" .
+                'Reply-To: support@bethlog.desiderata.com.gh' . "\r\n" .
+                'X-Mailer: PHP/' . phpversion();
+            $visitor = Visitor::find(3);
+
+            Notification::sendNow($visitor, new VisitorStatusNotification($visitor));
+
+            return response()->json([
+                'message' => 'Test email sent successfully',
+                'to' => $to
+            ]);
+        } catch (Exception $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'to' => $to
+            ]);
+        }
+    }
     /**
      * Display a listing of the resource.
      */
@@ -128,14 +157,26 @@ class VisitorController extends Controller
      */
     public function update(Request $request, Visitor $visitor)
     {
-        $request->validate([
-            'status' => 'sometimes|required|in:approved,rejected',
-            'notes' => 'nullable|string',
-        ]);
+        try {
+            $request->validate([
+                'status' => 'sometimes|required|in:approved,rejected',
+                'notes' => 'nullable|string',
+            ]);
 
-        $visitor->update($request->all());
+            $visitor->update($request->all());
 
-        return response()->json($visitor);
+            // Send email notification if status is updated
+            if ($request->has('status')) {
+                Notification::sendNow($visitor, new VisitorStatusNotification($visitor));
+            }
+
+            return response()->json($visitor);
+        } catch (\Throwable $th) {
+            return response()->json([
+                'message' => 'Failed to update visitor status',
+                'error' => $th->getMessage()
+            ], 500);
+        }
     }
 
     /**

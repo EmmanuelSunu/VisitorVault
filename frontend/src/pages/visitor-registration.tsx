@@ -18,6 +18,7 @@ import PhotoCaptureModal from "@/components/photo-capture-modal";
 import QrDisplayModal from "@/components/qr-display-modal";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
+import logo from "../assets/images/logo.png";
 
 // Step schemas for wizard form
 const returningVisitorSchema = z.object({
@@ -424,8 +425,13 @@ export default function VisitorRegistration() {
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center py-4 space-y-2 sm:space-y-0">
+            <div className="flex-shrink-0 pr-4">
+              <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center space-x-4">
+                <img src={logo} alt="Logo" className="w-full h-full object-contain" />
+              </div>
+            </div>
             <div className="flex-1">
-              <h1 className="text-xl sm:text-2xl font-bold text-gray-900">BethLog Visitor Management System</h1>
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Desiderata Visitor Management System</h1>
               <p className="text-sm sm:text-base text-gray-600">Welcome! Please complete your registration below.</p>
             </div>
             {user ? (
@@ -434,8 +440,8 @@ export default function VisitorRegistration() {
                 Dashboard
               </Button>
             ) : (
-              <Button variant="ghost" onClick={handleLogin} className="text-sm w-full sm:w-auto">
-                <User className="h-4 w-4 mr-2" />
+              <Button variant="ghost" onClick={handleLogin} className="text-sm w-full sm:w-auto hidden lg:flex">
+                <User className="h-4 w-4 mr-2 " />
                 Login
               </Button>
             )}
