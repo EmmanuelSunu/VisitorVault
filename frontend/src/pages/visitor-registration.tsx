@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -282,25 +282,41 @@ export default function VisitorRegistration() {
   const combinedForm = useForm<CombinedData>({
     resolver: zodResolver(combinedSchema),
     defaultValues: {
-      firstName: formData.firstName || "",
-      lastName: formData.lastName || "",
-      purpose: formData.purpose || "",
-      email: formData.email || "",
-      phone: formData.phone || "",
-      company: formData.company || "",
-      // hostName: formData.hostName || "",
-      // hostEmail: formData.hostEmail || "",
-      // hostPhone: formData.hostPhone || "",
+      firstName: "",
+      lastName: "",
+      purpose: "",
+      email: "",
+      phone: "",
+      company: "",
     },
   });
 
   const idForm = useForm<IdDetailsData>({
     resolver: zodResolver(idDetailsSchema),
     defaultValues: {
-      idType: formData.idType || "",
-      idNumber: formData.idNumber || "",
+      idType: "",
+      idNumber: "",
     },
   });
+
+  // Update form values when formData changes
+  useEffect(() => {
+    if (formData) {
+      combinedForm.reset({
+        firstName: formData.firstName || "",
+        lastName: formData.lastName || "",
+        purpose: formData.purpose || "",
+        email: formData.email || "",
+        phone: formData.phone || "",
+        company: formData.company || "",
+      });
+
+      idForm.reset({
+        idType: formData.idType || "",
+        idNumber: formData.idNumber || "",
+      });
+    }
+  }, [formData]);
 
   // Step handlers
   const onSubmitCombined = (data: CombinedData) => {

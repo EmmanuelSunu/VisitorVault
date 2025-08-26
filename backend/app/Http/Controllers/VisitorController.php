@@ -279,16 +279,15 @@ class VisitorController extends Controller
     {
         $query = $request->get('q');
 
-        if (empty($query)) {
-            return response()->json([]);
-        }
 
         $visitors = Visitor::query()
             ->where(function ($q) use ($query) {
                 $q->where('f_name', 'like', "%{$query}%")
                     ->orWhere('l_name', 'like', "%{$query}%")
                     ->orWhere('company', 'like', "%{$query}%")
-                    ->orWhere('id_number', 'like', "%{$query}%");
+                    ->orWhere('id_number', 'like', "%{$query}%")
+                    ->orWhere('email', 'like', "%{$query}%")
+                    ->orWhere('phone', 'like', "%{$query}%");
             })
             ->with(['host', 'visits'])
             ->latest()
