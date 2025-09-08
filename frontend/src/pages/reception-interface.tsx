@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, UseQueryResult } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
@@ -12,6 +12,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { QrCode, Search, UserCheck, UserX, AlertTriangle, FileOutput, Camera, Building, Check, X } from "lucide-react";
+
+interface PaginatedResponse<T> {
+  data: T[];
+  current_page?: number;
+  last_page?: number;
+  total?: number;
+  per_page?: number;
+}
 
 interface Visitor {
   id: number;
@@ -55,9 +63,9 @@ interface CheckedInVisitor {
 export default function ReceptionInterface() {
   const { user, isAuthenticated, isLoading, api } = useAuth();
   const { toast } = useToast();
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState<string>("");
   const [selectedVisitor, setSelectedVisitor] = useState<Visitor | null>(null);
-  const [manualBadgeNumber, setManualBadgeNumber] = useState("");
+  const [manualBadgeNumber, setManualBadgeNumber] = useState<string>("");
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -85,24 +93,54 @@ export default function ReceptionInterface() {
     refetchInterval: 30000, // Refresh every 30 seconds
   });
 
-  // Search visitors mutation
-  const searchMutation = useMutation({
-    mutationFn: async (query: string) => {
-      const response = await api.get(`/visitors/search?q=${encodeURIComponent(query)}`);
-      return response.data;
-    },
-    onSuccess: (visitors: Visitor[]) => {
-      if (visitors.length > 0) {
-        setSelectedVisitor(visitors[0]);
-      } else {
-        toast({
-          title: "Not Found",
-          description: "No visitor found with that search term.",
-          variant: "destructive",
-        });
+  // Search visitors query
+  const [currentPage, setCurrentPage] = useState(1);
+  const searchQueryResult: UseQueryResult<PaginatedResponse<Visitor>, Error> = useQuery({
+    queryKey: ["/api/visitors/search", searchQuery, currentPage] as const,
+    queryFn: async () => {
+      try {
+        const params = new URLSearchParams();
+        if (searchQuery) params.append('q', searchQuery);
+        if (currentPage > 1) params.append('page', currentPage.toString());
+        const queryString = params.toString();
+        console.log('Making request to:', `/visitors/search${queryString ? `?${queryString}` : ''}`); // Debug log
+                  const response = await api.get(`/visitors/search${queryString ? `?${queryString}` : ''}`);
+          console.log('Search response:', response.data); // Debug log
+          // Convert array response to paginated format
+          return {
+            data: Array.isArray(response.data) ? response.data : [],
+            total: Array.isArray(response.data) ? response.data.length : 0,
+            current_page: 1,
+            last_page: 1,
+            per_page: Array.isArray(response.data) ? response.data.length : 10
+          };
+      } catch (error) {
+        console.error('Search error:', error); // Debug log
+        throw error;
       }
     },
-    onError: (error: any) => {
+    enabled: true, // Always enable the query to show all visitors by default
+    staleTime: 30000, // Consider data fresh for 30 seconds
+    retry: 1, // Only retry once on failure
+    refetchOnWindowFocus: false, // Don't refetch when window regains focus
+  });
+
+  const { data: searchResults, isLoading: isSearching } = searchQueryResult;
+
+  // Handle successful search results
+  useEffect(() => {
+    const firstVisitor = searchResults?.data?.[0];
+    if (firstVisitor && !selectedVisitor) {
+      setSelectedVisitor(firstVisitor);
+    }
+  }, [searchResults, selectedVisitor]);
+
+  // Handle search errors
+  useEffect(() => {
+    if (searchQueryResult.error) {
+      const error = searchQueryResult.error as any;
+      console.error('Search query error:', error);
+      
       if (isUnauthorizedError(error)) {
         toast({
           title: "Unauthorized",
@@ -114,13 +152,14 @@ export default function ReceptionInterface() {
         }, 500);
         return;
       }
+
       toast({
         title: "Search Failed",
-        description: error.response?.data?.message || "Failed to search visitors",
+        description: error.response?.data?.message || error.message || "Failed to search visitors",
         variant: "destructive",
       });
-    },
-  });
+    }
+  }, [searchQueryResult.error, toast]);
 
   // Badge lookup mutation
   const badgeLookupMutation = useMutation({
@@ -299,12 +338,6 @@ export default function ReceptionInterface() {
       });
     },
   });
-
-  const handleSearch = () => {
-    if (searchQuery.trim()) {
-      searchMutation.mutate(searchQuery.trim());
-    }
-  };
 
   const handleBadgeLookup = () => {
     if (manualBadgeNumber.trim()) {
@@ -508,24 +541,99 @@ export default function ReceptionInterface() {
               <div className="mb-6">
                 <div className="relative">
                   <Input
+                    type="text"
                     placeholder="Search by name, company, or badge number..."
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                    onChange={(e) => setSearchQuery(e.target.value || "")}
                     className="pl-10"
                   />
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <Search className="h-4 w-4 text-gray-400" />
                   </div>
                 </div>
-                <Button
-                  className="w-full mt-2"
-                  onClick={handleSearch}
-                  disabled={searchMutation.isPending}
-                >
-                  {searchMutation.isPending ? "Searching..." : "Search"}
-                </Button>
               </div>
+
+              {/* Visitor List */}
+              {(() => { console.log('Render state:', { isSearching, searchResults }); return null; })()}
+              {isSearching ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                  <p className="text-gray-600">Searching visitors...</p>
+                </div>
+              ) : searchResults?.data?.length ? (
+                <div className="space-y-4 mb-6">
+                  <div className="flex justify-between items-center">
+                    <p className="text-sm text-gray-600">
+                      {searchQuery ? `Found ${searchResults?.total || 0} matching visitors` : 'All visitors'}
+                    </p>
+                  </div>
+                  <div className="space-y-2 max-h-96 overflow-y-auto">
+                    {searchResults?.data?.map((visitor: Visitor) => (
+                      <div
+                        key={visitor.id}
+                        className={`p-3 rounded-lg cursor-pointer transition-colors ${
+                          selectedVisitor?.id === visitor.id
+                            ? 'bg-primary/10 hover:bg-primary/20'
+                            : 'bg-gray-50 hover:bg-gray-100'
+                        }`}
+                        onClick={() => setSelectedVisitor(visitor)}
+                      >
+                        <div className="flex items-center space-x-3">
+                          {visitor.photoUrl && (
+                            <img
+                              src={visitor.photoUrl}
+                              alt={`${visitor.firstName} ${visitor.lastName}`}
+                              className="w-10 h-10 rounded-full object-cover"
+                            />
+                          )}
+                          <div className="flex-1">
+                            <p className="font-medium">
+                              {visitor.firstName} {visitor.lastName}
+                            </p>
+                            <p className="text-sm text-gray-500">
+                              {visitor.company || 'No company'} • Badge #{visitor.badgeNumber}
+                            </p>
+                          </div>
+                          <Badge className={`status-${visitor.status}`}>
+                            {visitor.status}
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {(searchResults?.last_page || 0) > 1 && (
+                    <div className="flex justify-between items-center pt-4">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={currentPage === 1}
+                        onClick={() => setCurrentPage(page => page - 1)}
+                      >
+                        Previous
+                      </Button>
+                      <span className="text-sm text-gray-600">
+                        Page {currentPage} of {searchResults?.last_page || 1}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={currentPage === (searchResults?.last_page || 1)}
+                        onClick={() => setCurrentPage(page => page + 1)}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-8 mb-6">
+                  <UserX className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-600">No visitors found</p>
+                  {searchQuery && (
+                    <p className="text-sm text-gray-500">Try a different search term</p>
+                  )}
+                </div>
+              )}
 
               {/* Selected Visitor Display */}
               {selectedVisitor ? (

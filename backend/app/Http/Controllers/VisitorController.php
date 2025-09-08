@@ -278,21 +278,25 @@ class VisitorController extends Controller
     public function search(Request $request)
     {
         $query = $request->get('q');
+        $perPage = $request->get('per_page', 10);
 
+        $visitorQuery = Visitor::query()->with(['host', 'visits']);
 
-        $visitors = Visitor::query()
-            ->where(function ($q) use ($query) {
+        // Only apply search filters if a query is provided
+        if ($query) {
+            $visitorQuery->where(function ($q) use ($query) {
                 $q->where('f_name', 'like', "%{$query}%")
                     ->orWhere('l_name', 'like', "%{$query}%")
                     ->orWhere('company', 'like', "%{$query}%")
                     ->orWhere('id_number', 'like', "%{$query}%")
                     ->orWhere('email', 'like', "%{$query}%")
                     ->orWhere('phone', 'like', "%{$query}%");
-            })
-            ->with(['host', 'visits'])
+            });
+        }
+
+        $visitors = $visitorQuery
             ->latest()
-            ->limit(10)
-            ->get()
+            ->paginate($perPage)
             ->map(function ($visitor) {
                 // Get the latest visit for status
                 $latestVisit = $visitor->visits()->latest()->first();
@@ -403,7 +407,6 @@ class VisitorController extends Controller
                 $q->where('email', 'like', "%{$searchTerm}%")
                     ->orWhere('phone', 'like', "%{$searchTerm}%");
             })
-            ->where('status', 'approved')
             ->with(['host', 'visits'])
             ->latest()
             ->first();
