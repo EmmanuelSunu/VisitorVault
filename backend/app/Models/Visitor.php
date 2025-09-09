@@ -16,31 +16,15 @@ class Visitor extends Model
     protected $fillable = [
         'f_name',
         'l_name',
-        'purpose',
         'phone',
         'email',
-        'company',
-        'h_name',
-        'h_email',
-        'h_phone',
         'id_type',
         'id_number',
         'pic',
-        'id_pic',
-        'status',
-        'visit_date',
-        'notes',
-        'user_id'
+        'id_pic'
     ];
 
-    protected $casts = [
-        'visit_date' => 'datetime',
-    ];
-
-    public function host(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'user_id');
-    }
+    protected $casts = [];
 
     public function visits(): HasMany
     {

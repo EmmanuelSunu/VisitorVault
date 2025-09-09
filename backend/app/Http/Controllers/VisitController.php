@@ -86,11 +86,25 @@ class VisitController extends Controller
             'visit_date' => 'sometimes|required|date',
             'notes' => 'nullable|string',
             'badge_number' => 'nullable|string|max:50',
+            'status' => 'sometimes|required|in:pending,approved,rejected',
         ]);
 
-        $visit->update($request->all());
+        $data = $request->all();
 
-        return response()->json($visit->load(['visitor', 'host']));
+        // Handle status changes
+        if ($request->has('status')) {
+            if ($request->status === 'approved') {
+                $data['approved_at'] = now();
+                $data['approved_by'] = $request->user()->id;
+            } elseif ($request->status === 'rejected') {
+                $data['approved_at'] = null;
+                $data['approved_by'] = null;
+            }
+        }
+
+        $visit->update($data);
+
+        return response()->json($visit->load(['visitor', 'host', 'company', 'approver']));
     }
 
     /**
@@ -107,8 +121,8 @@ class VisitController extends Controller
      */
     public function checkIn(Visit $visit)
     {
-        if ($visit->visitor->status !== 'approved') {
-            return response()->json(['message' => 'Visitor must be approved before check-in'], 422);
+        if ($visit->status !== 'approved') {
+            return response()->json(['message' => 'Visit must be approved before check-in'], 422);
         }
 
         if ($visit->check_in_time) {
@@ -164,10 +178,6 @@ class VisitController extends Controller
 
         $visitor = Visitor::findOrFail($request->visitor_id);
 
-        if ($visitor->status !== 'approved') {
-            return response()->json(['message' => 'Visitor must be approved before check-in'], 422);
-        }
-
         // Check if visitor already has an active visit
         $activeVisit = Visit::where('visitor_id', $visitor->id)
             ->whereNotNull('check_in_time')
@@ -175,33 +185,56 @@ class VisitController extends Controller
             ->first();
 
         if ($activeVisit) {
-            return response()->json(['message' => 'Visitor is already checked in'], 422);
+            return response()->json([
+                'message' => 'Visitor is already checked in',
+                'visit' => $activeVisit->load(['visitor', 'host', 'company'])
+            ], 422);
         }
 
-        // Find existing visit for today that hasn't been checked out
+        // Find approved visit for today that hasn't been checked out
         $existingVisit = Visit::where('visitor_id', $visitor->id)
-            ->where('visit_date', now()->toDateString())
+            ->whereDate('visit_date', now()->toDateString())  // Changed to whereDate for proper date comparison
+            ->where('status', 'approved')
             ->whereNull('check_out_time')
+            ->orderBy('created_at', 'desc') // Get the most recent approved visit
             ->first();
 
-        if ($existingVisit) {
-            // Use the existing visit and check in
-            $existingVisit->update([
-                'check_in_time' => now(),
-            ]);
-            return response()->json($existingVisit->load(['visitor', 'host']));
+        // Get today's visits for this visitor to show in error response
+        $todayVisits = Visit::where('visitor_id', $visitor->id)
+            ->whereDate('visit_date', now()->toDateString())
+            ->with(['company', 'host'])
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        if (!$existingVisit) {
+            return response()->json([
+                'message' => 'No approved visit found for today. Please ensure the visit is approved before check-in.',
+                'visitor' => $visitor,
+                'today_visits' => $todayVisits,
+                'error_details' => [
+                    'date' => now()->toDateString(),
+                    'has_pending_visits' => $todayVisits->where('status', 'pending')->count() > 0,
+                    'has_rejected_visits' => $todayVisits->where('status', 'rejected')->count() > 0,
+                    'total_visits_today' => $todayVisits->count()
+                ]
+            ], 422);
         }
 
-        // Create a new visit for today
-        $visit = Visit::create([
-            'visitor_id' => $visitor->id,
-            'user_id' => $visitor->user_id,
-            'visit_date' => now()->toDateString(),
-            'badge_number' => 'BADGE-' . strtoupper(substr(md5(uniqid()), 0, 8)),
+        if ($existingVisit->check_out_time) {
+            return response()->json([
+                'message' => 'This visit has already been checked out. Please create a new visit.'
+            ], 422);
+        }
+
+        // Use the existing visit and check in
+        $existingVisit->update([
             'check_in_time' => now(),
         ]);
 
-        return response()->json($visit->load(['visitor', 'host']));
+        return response()->json([
+            'message' => 'Check-in successful',
+            'visit' => $existingVisit->load(['visitor', 'host', 'company'])
+        ]);
     }
 
     /**
@@ -219,10 +252,14 @@ class VisitController extends Controller
         $activeVisit = Visit::where('visitor_id', $visitor->id)
             ->whereNotNull('check_in_time')
             ->whereNull('check_out_time')
+            ->orderBy('check_in_time', 'desc') // Get the most recent check-in
             ->first();
 
         if (!$activeVisit) {
-            return response()->json(['message' => 'Visitor is not currently checked in'], 422);
+            return response()->json([
+                'message' => 'Visitor is not currently checked in',
+                'visitor' => $visitor->load('visits')
+            ], 422);
         }
 
         // Check out the visit
@@ -230,7 +267,10 @@ class VisitController extends Controller
             'check_out_time' => now(),
         ]);
 
-        return response()->json($activeVisit->load(['visitor', 'host']));
+        return response()->json([
+            'message' => 'Check-out successful',
+            'visit' => $activeVisit->load(['visitor', 'host', 'company'])
+        ]);
     }
 
     /**

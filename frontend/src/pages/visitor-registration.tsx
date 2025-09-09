@@ -46,12 +46,9 @@ const contactDetailsSchema = z.object({
   phone: z.string()
     .min(1, "Phone number is required")
     .regex(/^\+?[0-9]{10,}$/, "Phone number must be at least 10 digits and can start with +"),
-  company: z.string().optional(),
-  // hostName: z.string().min(1, "Host (Person or Company) is required"),
-  // hostEmail: z.string().email("Valid host email is required").optional().or(z.literal('')),
-  // hostPhone: z.string()
-  // .min(1, "Phone number is required")
-  // .regex(/^\+?[0-9]{10,}$/, "Phone number must be at least 10 digits and can start with +"),
+  company_id: z.string().optional(),
+  host_id: z.string().optional(),
+  notes: z.string().optional(),
 });
 
 const idDetailsSchema = z.object({
@@ -214,9 +211,19 @@ export default function VisitorRegistration() {
 
   // Mutation for creating a visit for returning visitor
   const createVisitMutation = useMutation({
-    mutationFn: async (data: { visitorId: number; visit_date: string; notes?: string }) => {
+    mutationFn: async (data: { 
+      visitorId: number; 
+      visit_date: string; 
+      purpose: string;
+      company_id?: string;
+      host_id?: string;
+      notes?: string;
+    }) => {
       const response = await api.post(`/visitor/${data.visitorId}/create-visit`, {
         visit_date: data.visit_date,
+        purpose: data.purpose,
+        company_id: data.company_id,
+        host_id: data.host_id,
         notes: data.notes,
       });
       return response.data;
@@ -287,7 +294,8 @@ export default function VisitorRegistration() {
       purpose: "",
       email: "",
       phone: "",
-      company: "",
+      company_id: "",
+      host_id: "",
     },
   });
 
@@ -297,6 +305,20 @@ export default function VisitorRegistration() {
       idType: "",
       idNumber: "",
     },
+  });
+
+  // Get the selected company ID from the form
+  const selectedCompanyId = combinedForm.watch("company_id");
+
+  // Fetch hosts based on selected company
+  const { data: hosts = [] } = useQuery({
+    queryKey: ["/api/hosts", selectedCompanyId],
+    queryFn: async () => {
+      if (!selectedCompanyId) return [];
+      const response = await api.get(`/companies/${selectedCompanyId}/hosts`);
+      return response.data;
+    },
+    enabled: !!selectedCompanyId, // Only run query when a company is selected
   });
 
   // Update form values when formData changes
@@ -366,7 +388,10 @@ export default function VisitorRegistration() {
       createVisitMutation.mutate({
         visitorId: formData.id,
         visit_date: today,
-        notes: `Return visit - ${formData.purpose}`,
+        purpose: formData.purpose || 'Return visit',
+        company_id: formData.company_id,
+        host_id: formData.host_id,
+        notes: formData.notes,
       });
     } else {
       // Create a new registration
@@ -374,9 +399,10 @@ export default function VisitorRegistration() {
         f_name: formData.firstName!,
         l_name: formData.lastName!,
         purpose: formData.purpose!,
-        email: formData.email!,
-        phone: formData.phone!,
-        company: formData.company,
+      email: formData.email!,
+      phone: formData.phone!,
+      company_id: formData.company_id,
+      host_id: formData.host_id,
         // h_name: formData.hostName!,
         // h_email: formData.hostEmail!,
         // h_phone: formData.hostPhone!,
@@ -665,22 +691,70 @@ export default function VisitorRegistration() {
                     />
                     <FormField
                       control={combinedForm.control}
-                      name="company"
+                      name="company_id"
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Company (Optional)</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
+                          <Select 
+                            onValueChange={(value) => {
+                              field.onChange(value);
+                              // Reset host when company changes
+                              combinedForm.setValue('host_id', '');
+                            }} 
+                            value={field.value || ''}
+                          >
                             <FormControl>
                               <SelectTrigger>
                                 <SelectValue placeholder="Select your company" />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              {companies.map((company: any) => (
-                                <SelectItem key={company.id} value={company.name}>
-                                  {company.name}
+                              {companies?.map((company: any) => (
+                                <SelectItem key={company.id} value={String(company.id)}>
+                                  {String(company.name)}
                                 </SelectItem>
                               ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={combinedForm.control}
+                      name="host_id"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Host (Optional)</FormLabel>
+                          <Select 
+                            onValueChange={field.onChange} 
+                            value={field.value || ''}
+                            disabled={!selectedCompanyId || hosts.length === 0}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder={
+                                  !selectedCompanyId 
+                                    ? "Select a company first" 
+                                    : hosts.length === 0 
+                                      ? "No hosts available" 
+                                      : "Select a host"
+                                } />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {hosts?.map((host: any) => {
+                                const hostName = String(host.name || '');
+                                const department = host.department ? String(host.department) : 'No Department';
+                                return (
+                                  <SelectItem 
+                                    key={host.id} 
+                                    value={String(host.id)}
+                                  >
+                                    {`${hostName} - ${department}`}
+                                  </SelectItem>
+                                );
+                              })}
                             </SelectContent>
                           </Select>
                           <FormMessage />
@@ -943,14 +1017,27 @@ export default function VisitorRegistration() {
                       <p className="text-sm text-gray-500">Phone</p>
                       <p className="font-medium">{formData.phone}</p>
                     </div>
-                    <div>
-                      <p className="text-sm text-gray-500">Company</p>
-                      <p className="font-medium">{formData.company || "Not specified"}</p>
+                      <div>
+                        <p className="text-sm text-gray-500">Company</p>
+                        <p className="font-medium">
+                          {formData.company_id 
+                            ? String(companies?.find((c: any) => String(c.id) === String(formData.company_id))?.name || "Not found")
+                            : "Not specified"
+                          }</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500">Host</p>
+                        <p className="font-medium">
+                          {formData.host_id 
+                            ? String(hosts?.find((h: any) => String(h.id) === String(formData.host_id))?.name || "Not found")
+                            : "Not specified"
+                          }
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Visit Details */}
+                  {/* Visit Details */}
                 <div className="bg-blue-50 rounded-lg p-4">
                   <h3 className="font-semibold text-gray-900 mb-3 flex items-center">
                     <Calendar className="mr-2 h-4 w-4" />

@@ -4,6 +4,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\VisitorController;
 use App\Http\Controllers\VisitController;
 use App\Http\Controllers\CompanyController;
+use App\Http\Controllers\HostController;
 use App\Http\Controllers\TestSmtpController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -79,4 +80,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/companies/{company}', [CompanyController::class, 'show']);
     Route::put('/companies/{company}', [CompanyController::class, 'update']);
     Route::delete('/companies/{company}', [CompanyController::class, 'destroy']);
+
+    // Host management routes
+    Route::get('/hosts', [HostController::class, 'index']);
+    Route::post('/hosts', [HostController::class, 'store']);
+    Route::get('/hosts/{host}', [HostController::class, 'show']);
+    Route::put('/hosts/{host}', [HostController::class, 'update']);
+    Route::delete('/hosts/{host}', [HostController::class, 'destroy']);
+    Route::patch('/hosts/{host}/toggle-status', [HostController::class, 'toggleStatus']);
+
+    // Company-specific host routes
+    Route::get('/companies/{company}/hosts', [HostController::class, 'getCompanyHosts']);
 });

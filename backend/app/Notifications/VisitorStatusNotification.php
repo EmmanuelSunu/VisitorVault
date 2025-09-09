@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use App\Models\Visitor;
+use App\Models\Visit;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -16,7 +17,8 @@ class VisitorStatusNotification extends Notification implements ShouldQueue
      * Create a new notification instance.
      */
     public function __construct(
-        protected Visitor $visitor
+        protected Visitor $visitor,
+        protected Visit $visit
     ) {}
 
     /**
@@ -34,8 +36,9 @@ class VisitorStatusNotification extends Notification implements ShouldQueue
      */
     public function toMail(object $notifiable): MailMessage
     {
-        $status = $this->visitor->status;
-        $visitDate = $this->visitor->visit_date->format('F j, Y');
+        $status = $this->visit->status;
+        $visitDate = $this->visit->visit_date->format('F j, Y');
+        $hostName = $this->visit->host ? $this->visit->host->name : 'your host';
 
         $message = (new MailMessage)
             ->subject("Your Visit Request Status Update")
@@ -44,13 +47,17 @@ class VisitorStatusNotification extends Notification implements ShouldQueue
         if ($status === 'approved') {
             $message->line("Your visit request for {$visitDate} has been approved.")
                 ->line("You can now proceed with your visit as planned.");
-            // ->line("Host Details:")
-            // ->line("Name: {$this->visitor->h_name}")
-            // ->line("Email: {$this->visitor->h_email}")
-            // ->line("Phone: {$this->visitor->h_phone}");
+
+            if ($this->visit->host) {
+                $message->line("Host Details:")
+                    ->line("Name: {$this->visit->host->name}")
+                    ->line("Department: {$this->visit->host->department}");
+            }
         } else {
-            $message->line("Your visit request for {$visitDate} has been rejected.")
-                ->line("Reason: {$this->visitor->notes}");
+            $message->line("Your visit request for {$visitDate} has been rejected.");
+            if ($this->visit->notes) {
+                $message->line("Reason: {$this->visit->notes}");
+            }
         }
 
         return $message->line("If you have any questions, please contact your host or the reception.");
@@ -65,8 +72,13 @@ class VisitorStatusNotification extends Notification implements ShouldQueue
     {
         return [
             'visitor_id' => $this->visitor->id,
-            'status' => $this->visitor->status,
-            'visit_date' => $this->visitor->visit_date,
+            'visit_id' => $this->visit->id,
+            'status' => $this->visit->status,
+            'visit_date' => $this->visit->visit_date,
+            'host' => $this->visit->host ? [
+                'name' => $this->visit->host->name,
+                'department' => $this->visit->host->department,
+            ] : null,
         ];
     }
 }

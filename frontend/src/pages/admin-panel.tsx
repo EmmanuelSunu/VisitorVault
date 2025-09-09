@@ -33,9 +33,22 @@ import {
   Database,
   Server,
   Camera,
-  Mail
+  Mail,
+  UserCog
 } from "lucide-react";
 import { AxiosError } from "axios";
+
+// Form schema for host creation/editing
+const hostFormSchema = z.object({
+  company_id: z.string().min(1, "Company is required"),
+  name: z.string().min(1, "Name is required"),
+  email: z.string().email("Invalid email address").optional().nullable(),
+  phone: z.string().optional().nullable(),
+  department: z.string().optional().nullable(),
+  position: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  is_active: z.boolean().default(true),
+});
 
 // Form schema for company creation/editing
 const companyFormSchema = z.object({
@@ -91,6 +104,8 @@ export default function AdminPanel() {
   const [isCompanyFormOpen, setIsCompanyFormOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
   const [editingCompany, setEditingCompany] = useState<any>(null);
+  const [isHostFormOpen, setIsHostFormOpen] = useState(false);
+  const [editingHost, setEditingHost] = useState<any>(null);
 
   // User form setup
   const userForm = useForm<z.infer<typeof userFormSchema>>({
@@ -115,6 +130,21 @@ export default function AdminPanel() {
     },
   });
 
+  // Host form setup
+  const hostForm = useForm<z.infer<typeof hostFormSchema>>({
+    resolver: zodResolver(hostFormSchema),
+    defaultValues: {
+      company_id: "",
+      name: "",
+      email: "",
+      phone: "",
+      department: "",
+      position: "",
+      notes: "",
+      is_active: true,
+    },
+  });
+
   // Reset forms when dialogs close
   useEffect(() => {
     if (!isUserFormOpen && !editingUser) {
@@ -127,6 +157,12 @@ export default function AdminPanel() {
       companyForm.reset();
     }
   }, [isCompanyFormOpen, editingCompany, companyForm]);
+
+  useEffect(() => {
+    if (!isHostFormOpen && !editingHost) {
+      hostForm.reset();
+    }
+  }, [isHostFormOpen, editingHost, hostForm]);
 
   // Set form values when editing user
   useEffect(() => {
@@ -153,6 +189,22 @@ export default function AdminPanel() {
     }
   }, [editingCompany, companyForm]);
 
+  // Set form values when editing host
+  useEffect(() => {
+    if (editingHost) {
+      hostForm.reset({
+        company_id: editingHost.company_id,
+        name: editingHost.name,
+        email: editingHost.email || "",
+        phone: editingHost.phone || "",
+        department: editingHost.department || "",
+        position: editingHost.position || "",
+        notes: editingHost.notes || "",
+        is_active: editingHost.is_active,
+      });
+    }
+  }, [editingHost, hostForm]);
+
   // Redirect if not authenticated or not admin
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -162,7 +214,7 @@ export default function AdminPanel() {
         variant: "destructive",
       });
       setTimeout(() => {
-        window.location.href = "/api/login";
+        window.location.href = "//staff-login";
       }, 500);
       return;
     }
@@ -224,7 +276,7 @@ export default function AdminPanel() {
           variant: "destructive",
         });
         setTimeout(() => {
-          window.location.href = "/api/login";
+          window.location.href = "//staff-login";
         }, 500);
         return;
       }
@@ -257,7 +309,7 @@ export default function AdminPanel() {
           variant: "destructive",
         });
         setTimeout(() => {
-          window.location.href = "/api/login";
+          window.location.href = "//staff-login";
         }, 500);
         return;
       }
@@ -286,7 +338,7 @@ export default function AdminPanel() {
           variant: "destructive",
         });
         setTimeout(() => {
-          window.location.href = "/api/login";
+          window.location.href = "//staff-login";
         }, 500);
         return;
       }
@@ -329,6 +381,179 @@ export default function AdminPanel() {
     setIsCompanyFormOpen(false);
     setEditingCompany(null);
     companyForm.reset();
+  };
+
+  // Fetch all hosts
+  const { data: allHosts = [], isLoading: loadingHosts } = useQuery({
+    queryKey: ["/api/hosts"],
+    queryFn: async () => {
+      const response = await api.get("/hosts?include_company=true");
+      return response.data;
+    },
+    enabled: isAuthenticated && user?.role === 'admin',
+  });
+
+  // Create host mutation
+  const createHostMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof hostFormSchema>) => {
+      const response = await api.post("/hosts", data);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hosts"] });
+      toast({ title: "Success", description: "Host created successfully" });
+      setIsHostFormOpen(false);
+      hostForm.reset();
+    },
+    onError: (error: AxiosError<ApiErrorResponse>) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "//staff-login";
+        }, 500);
+        return;
+      }
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to create host",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Update host mutation
+  const updateHostMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: z.infer<typeof hostFormSchema> }) => {
+      const response = await api.put(`/hosts/${id}`, data);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hosts"] });
+      toast({ title: "Success", description: "Host updated successfully" });
+      setEditingHost(null);
+      setIsHostFormOpen(false);
+      hostForm.reset();
+    },
+    onError: (error: AxiosError<ApiErrorResponse>) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "//staff-login";
+        }, 500);
+        return;
+      }
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to update host",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Delete host mutation
+  const deleteHostMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await api.delete(`/hosts/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hosts"] });
+      toast({ title: "Success", description: "Host deleted successfully" });
+    },
+    onError: (error: AxiosError<ApiErrorResponse>) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "//staff-login";
+        }, 500);
+        return;
+      }
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to delete host",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Toggle host status mutation
+  const toggleHostStatusMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await api.patch(`/hosts/${id}/toggle-status`);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hosts"] });
+      toast({ title: "Success", description: "Host status updated successfully" });
+    },
+    onError: (error: AxiosError<ApiErrorResponse>) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "//staff-login";
+        }, 500);
+        return;
+      }
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to update host status",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleHostSubmit = async (data: z.infer<typeof hostFormSchema>) => {
+    if (editingHost) {
+      await updateHostMutation.mutateAsync({ id: editingHost.id, data });
+    } else {
+      await createHostMutation.mutateAsync(data);
+    }
+  };
+
+  const handleDeleteHost = async (hostId: string) => {
+    if (window.confirm("Are you sure you want to delete this host?")) {
+      await deleteHostMutation.mutateAsync(hostId);
+    }
+  };
+
+  const handleEditHost = (host: any) => {
+    setEditingHost(host);
+    setIsHostFormOpen(true);
+    hostForm.reset({
+      company_id: host.company_id,
+      name: host.name,
+      email: host.email || "",
+      phone: host.phone || "",
+      department: host.department || "",
+      position: host.position || "",
+      notes: host.notes || "",
+      is_active: host.is_active,
+    });
+  };
+
+  const handleCloseHostForm = () => {
+    setIsHostFormOpen(false);
+    setEditingHost(null);
+    hostForm.reset();
+  };
+
+  const handleToggleHostStatus = async (hostId: string) => {
+    await toggleHostStatusMutation.mutateAsync(hostId);
   };
 
   // Fetch all users with filters
@@ -376,7 +601,7 @@ export default function AdminPanel() {
           variant: "destructive",
         });
         setTimeout(() => {
-          window.location.href = "/api/login";
+          window.location.href = "//staff-login";
         }, 500);
         return;
       }
@@ -409,7 +634,7 @@ export default function AdminPanel() {
           variant: "destructive",
         });
         setTimeout(() => {
-          window.location.href = "/api/login";
+          window.location.href = "//staff-login";
         }, 500);
         return;
       }
@@ -438,7 +663,7 @@ export default function AdminPanel() {
           variant: "destructive",
         });
         setTimeout(() => {
-          window.location.href = "/api/login";
+          window.location.href = "//staff-login";
         }, 500);
         return;
       }
@@ -468,7 +693,7 @@ export default function AdminPanel() {
           variant: "destructive",
         });
         setTimeout(() => {
-          window.location.href = "/api/login";
+          window.location.href = "//staff-login";
         }, 500);
         return;
       }
@@ -552,7 +777,7 @@ export default function AdminPanel() {
         {/* Admin Tab Navigation */}
         <Tabs defaultValue="overview" className="space-y-8">
           <div className="border-b border-gray-200">
-            <TabsList className="grid w-full grid-cols-4">
+            <TabsList className="grid w-full grid-cols-5">
               <TabsTrigger value="overview" className="flex items-center space-x-2">
                 <BarChart3 className="h-4 w-4" />
                 <span>Overview</span>
@@ -564,6 +789,10 @@ export default function AdminPanel() {
               <TabsTrigger value="companies" className="flex items-center space-x-2">
                 <Building className="h-4 w-4" />
                 <span>Company Management</span>
+              </TabsTrigger>
+              <TabsTrigger value="hosts" className="flex items-center space-x-2">
+                <UserCog className="h-4 w-4" />
+                <span>Host Management</span>
               </TabsTrigger>
               {/* <TabsTrigger value="settings" className="flex items-center space-x-2">
                 <Settings className="h-4 w-4" />
@@ -1270,6 +1499,293 @@ export default function AdminPanel() {
                   <div className="text-center py-8">
                     <Building className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                     <p className="text-gray-600">No companies found. Add your first company!</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Host Management Tab */}
+          <TabsContent value="hosts" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Host Management</CardTitle>
+                  <Dialog open={isHostFormOpen} onOpenChange={setIsHostFormOpen}>
+                    <DialogTrigger asChild>
+                      <Button onClick={() => {
+                        setEditingHost(null);
+                        hostForm.reset({
+                          company_id: "",
+                          name: "",
+                          email: "",
+                          phone: "",
+                          department: "",
+                          position: "",
+                          notes: "",
+                          is_active: true,
+                        });
+                        setIsHostFormOpen(true);
+                      }}>
+                        <UserCog className="mr-2 h-4 w-4" />
+                        Add Host
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>{editingHost ? "Edit Host" : "Add New Host"}</DialogTitle>
+                      </DialogHeader>
+                      <Form {...hostForm}>
+                        <form onSubmit={hostForm.handleSubmit(handleHostSubmit)} className="space-y-4">
+                          <FormField
+                            control={hostForm.control}
+                            name="company_id"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Company</FormLabel>
+                                <Select
+                                  value={field.value}
+                                  onValueChange={field.onChange}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select company" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {allCompanies.map((company: any) => (
+                                      <SelectItem key={company.id} value={company.id.toString()}>
+                                        {company.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={hostForm.control}
+                            name="name"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Name</FormLabel>
+                                <FormControl>
+                                  <Input {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={hostForm.control}
+                            name="email"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Email</FormLabel>
+                                <FormControl>
+                                  <Input type="email" {...field} value={field.value || ""} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={hostForm.control}
+                            name="phone"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Phone</FormLabel>
+                                <FormControl>
+                                  <Input {...field} value={field.value || ""} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={hostForm.control}
+                            name="department"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Department</FormLabel>
+                                <FormControl>
+                                  <Input {...field} value={field.value || ""} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={hostForm.control}
+                            name="position"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Position</FormLabel>
+                                <FormControl>
+                                  <Input {...field} value={field.value || ""} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={hostForm.control}
+                            name="notes"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Notes</FormLabel>
+                                <FormControl>
+                                  <Input {...field} value={field.value || ""} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={hostForm.control}
+                            name="is_active"
+                            render={({ field }) => (
+                              <FormItem className="flex items-center space-x-2">
+                                <FormControl>
+                                  <input
+                                    type="checkbox"
+                                    checked={field.value}
+                                    onChange={field.onChange}
+                                  />
+                                </FormControl>
+                                <FormLabel>Active</FormLabel>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <div className="flex justify-end space-x-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={handleCloseHostForm}
+                            >
+                              Cancel
+                            </Button>
+                            <Button type="submit">
+                              {editingHost ? "Update" : "Create"} Host
+                            </Button>
+                          </div>
+                        </form>
+                      </Form>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+              </CardHeader>
+              
+              <CardContent className="p-0">
+                {loadingHosts ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                    <p className="text-gray-600">Loading hosts...</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Host Name
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Company
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Contact Info
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Department
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Status
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {allHosts.map((host: any) => (
+                          <tr key={host.id} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm font-medium text-gray-900">
+                                {host.name}
+                              </div>
+                              <div className="text-sm text-gray-500">
+                                {host.position}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-900">
+                                {host.company?.name || 'N/A'}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-900">
+                                {host.email && (
+                                  <div className="flex items-center space-x-1">
+                                    <Mail className="h-4 w-4" />
+                                    <span>{host.email}</span>
+                                  </div>
+                                )}
+                                {host.phone && (
+                                  <div className="text-sm text-gray-500">
+                                    {host.phone}
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-900">
+                                {host.department || 'N/A'}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <Badge className={host.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>
+                                {host.is_active ? 'Active' : 'Inactive'}
+                              </Badge>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEditHost(host)}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleToggleHostStatus(host.id)}
+                              >
+                                {host.is_active ? (
+                                  <XCircle className="h-4 w-4 text-red-500" />
+                                ) : (
+                                  <CheckCircle className="h-4 w-4 text-green-500" />
+                                )}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDeleteHost(host.id)}
+                              >
+                                <Trash2 className="h-4 w-4 text-red-500" />
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {allHosts.length === 0 && !loadingHosts && (
+                  <div className="text-center py-8">
+                    <UserCog className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-600">No hosts found. Add your first host!</p>
                   </div>
                 )}
               </CardContent>

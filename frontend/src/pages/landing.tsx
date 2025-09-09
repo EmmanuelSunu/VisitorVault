@@ -25,7 +25,7 @@ export default function Landing() {
               </div>
             </div>
             
-            <Button onClick={() => window.location.href = "/api/login"}>
+            <Button onClick={() => window.location.href = "//staff-login"}>
               Sign In
             </Button>
           </div>

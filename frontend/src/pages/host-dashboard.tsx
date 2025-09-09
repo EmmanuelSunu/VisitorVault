@@ -12,50 +12,57 @@ import RoleTabs from "@/components/role-tabs";
 
 interface Visitor {
   id: number;
-  f_name: string;
-  l_name: string;
+  name: string;
+  firstName: string;
+  lastName: string;
   email: string;
   phone: string;
-  company?: string;
-  purpose: string;
-  visit_date: string;
-  status: 'pending' | 'approved' | 'rejected';
   pic?: string;
   id_pic?: string;
   id_type: string;
   id_number: string;
-  h_name: string;
-  h_email: string;
-  h_phone: string;
-  notes?: string;
-  user_id: number;
+  visitRequests: VisitRequest[];
   created_at: string;
   updated_at: string;
+  visitor: Visitor;
+  company: Company;
+  host: Host;
 }
 
 interface Host {
   id: number;
   name: string;
   email: string;
-  email_verified_at: string;
+  phone: string;
   role: string;
   created_at: string;
   updated_at: string;
+  department: string;
 }
 
-interface Visit {
+interface Company {
   id: number;
-  visitor_id: number;
-  user_id: number;
-  visit_date: string;
-  check_in_time?: string;
-  check_out_time?: string;
+  name: string;
+  address?: string;
+  contact_person?: string;
+  contact_email?: string;
+  contact_phone?: string;
+  notes?: string;
+}
+interface VisitRequest {
+  id: number;
+  status: 'pending' | 'approved' | 'rejected';
+  purpose: string;
+  checkedInAt: string | null;
+  checkedOutAt: string | null;
+  visitDate: string;
+  company: Company | null;
+  host: Host | null;
+  duration: string | null;
   notes?: string;
   badge_number?: string;
   created_at: string;
   updated_at: string;
-  visitor: Visitor;
-  host: Host;
 }
 
 interface DashboardData {
@@ -89,6 +96,7 @@ export default function HostDashboard() {
       return response.data;
     },
     enabled: isAuthenticated,
+    refetchInterval: 30000, // Refresh every 30 seconds
   });
 
   // Update visitor status mutation
@@ -308,8 +316,8 @@ export default function HostDashboard() {
                                   <User className="h-5 w-5 text-gray-600" />
                                 </div>
                                 <div>
-                                  <h3 className="font-semibold text-gray-900">{`${request.f_name} ${request.l_name}`}</h3>
-                                  <p className="text-sm text-gray-600">{request.company || 'No company'}</p>
+                                  <h3 className="font-semibold text-gray-900">{`${request.visitor?.name}`}</h3>
+                                  <p className="text-sm text-gray-600">{request.company?.name || 'No company'}</p>
                                 </div>
                               </div>
                               <Badge variant="outline" className="status-pending">
@@ -320,14 +328,14 @@ export default function HostDashboard() {
                             <div className="space-y-2 mb-4">
                               <div className="flex items-center text-sm text-gray-600">
                                 <Mail className="h-4 w-4 mr-2" />
-                                {request.email}
+                                {request.visitor?.email}
                               </div>
                               <div className="flex items-center text-sm text-gray-600">
                                 <Calendar className="h-4 w-4 mr-2" />
                                 {new Date(request.visit_date).toLocaleDateString()}
                               </div>
                               <p className="text-sm text-gray-600 line-clamp-2">
-                                <strong>Purpose:</strong> {request.purpose}
+                                <strong>Purpose:</strong> {request.visitor?.purpose}
                               </p>
                             </div>
 
@@ -343,7 +351,7 @@ export default function HostDashboard() {
                               </Button>
                               <Button
                                 size="sm"
-                                onClick={() => handleApprove(request.id)}
+                                onClick={() => handleApprove(request.visitor.id)}
                                 className="flex-1 sm:flex-none"
                               >
                                 <Check className="h-4 w-4 mr-2" />
@@ -352,7 +360,7 @@ export default function HostDashboard() {
                               <Button
                                 size="sm"
                                 variant="destructive"
-                                onClick={() => handleReject(request.id)}
+                                onClick={() => handleReject(request.visitor.id)}
                                 className="flex-1 sm:flex-none"
                               >
                                 <X className="h-4 w-4 mr-2" />
@@ -382,35 +390,35 @@ export default function HostDashboard() {
                       {(todayRequests as Visit[]).map((request) => (
                         <div key={request.id} className="flex items-center space-x-3">
                           <div className="flex-shrink-0">
-                            <div className={`w-2 h-2 rounded-full ${request.visitor.status === 'approved' ? 'bg-blue-500' :
-                              request.visitor.status === 'rejected' ? 'bg-red-500' : 'bg-gray-300'
+                            <div className={`w-2 h-2 rounded-full ${request.status === 'approved' ? 'bg-blue-500' :
+                              request.status === 'rejected' ? 'bg-red-500' : 'bg-gray-300'
                               }`}></div>
                           </div>
                           <div className="flex-1">
                             <p className="text-sm font-medium text-gray-900">
-                              {`${request.visitor.f_name} ${request.visitor.l_name}`}
+                              {`${request.visitor?.name || ''} `}
                             </p>
                             <p className="text-xs text-gray-500">
                               {request.check_in_time ? new Date(request.check_in_time).toLocaleTimeString([], {
                                 hour: '2-digit',
                                 minute: '2-digit'
-                              }) : 'Not checked in'} - {request.visitor.purpose ? request.visitor.purpose.substring(0, 30) + '...' : 'No purpose'}
+                              }) : 'Not checked in'} - {request.visitor?.purpose ? request.visitor.purpose.substring(0, 30) + '...' : 'No purpose'}
                             </p>
                             <Badge
-                              className={`mt-1 ${request.visitor.status === 'approved' ? 'status-approved' :
-                                request.visitor.status === 'rejected' ? 'status-rejected' :
+                              className={`mt-1 ${request.status === 'approved' ? 'status-approved' :
+                                request.status === 'rejected' ? 'status-rejected' :
                                   'status-pending'
                                 }`}
                             >
-                              {request.visitor.status === 'approved' ? 'Approved' :
-                                request.visitor.status === 'rejected' ? 'Rejected' : 'Pending'}
+                              {request.status === 'approved' ? 'Approved' :
+                                request.status === 'rejected' ? 'Rejected' : 'Pending'}
                             </Badge>
                           </div>
-                          {request.visitor.status === 'approved' && !request.check_out_time && (
+                          {request.status === 'approved' && !request.check_out_time && (
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => request.check_in_time ? handleCheckOut(request.visitor.id) : handleCheckIn(request.visitor.id)}
+                              onClick={() => request.check_in_time ? handleCheckOut(request.visitor?.id!) : handleCheckIn(request.visitor?.id!)}
                             >
                               {request.check_in_time ? 'Check Out' : 'Check In'}
                             </Button>
@@ -442,15 +450,14 @@ export default function HostDashboard() {
               <div className="flex flex-col sm:flex-row items-start space-y-4 sm:space-y-0 sm:space-x-4">
                 <div className="flex-1">
                   <h3 className="text-lg sm:text-xl font-semibold text-gray-900">
-                    {`${selectedRequest.f_name} ${selectedRequest.l_name}`}
+                    {`${selectedRequest.visitor?.name} `}
                   </h3>
-                  <p className="text-gray-600">{selectedRequest.company || 'No company'}</p>
                   <div className="mt-2 space-y-1">
                     <p className="text-sm text-gray-500">
-                      <span className="font-medium">Email:</span> {selectedRequest.email}
+                      <span className="font-medium">Email:</span> {selectedRequest.visitor?.email}
                     </p>
                     <p className="text-sm text-gray-500">
-                      <span className="font-medium">Phone:</span> {selectedRequest.phone}
+                      <span className="font-medium">Phone:</span> {selectedRequest.visitor?.phone}
                     </p>
                   </div>
                 </div>
@@ -466,12 +473,12 @@ export default function HostDashboard() {
                   <div className="space-y-2">
                     <h5 className="font-medium text-sm text-gray-700">Visitor Photo</h5>
                     <div className="relative group">
-                      {selectedRequest.pic ? (
+                      {selectedRequest.visitor?.pic ? (
                         <img
-                          src={`${media_URL}/storage/${selectedRequest.pic}`}
+                          src={`${media_URL}/storage/${selectedRequest.visitor?.pic}`}
                           alt="Visitor Photo"
                           className="w-full h-32 sm:h-48 object-cover rounded-lg border cursor-pointer hover:opacity-90 transition-opacity"
-                          onClick={() => handleViewPhoto(`${media_URL}/storage/${selectedRequest.pic}`, 'Visitor Photo')}
+                          onClick={() => handleViewPhoto(`${media_URL}/storage/${selectedRequest.visitor?.pic}`, 'Visitor Photo')}
                         />
                       ) : (
                         <div className="w-full h-32 sm:h-48 flex items-center justify-center bg-gray-100 rounded-lg border text-gray-400">No photo</div>
@@ -481,9 +488,9 @@ export default function HostDashboard() {
                   <div className="space-y-2">
                     <h5 className="font-medium text-sm text-gray-700">ID Document</h5>
                     <div className="relative group">
-                      {selectedRequest.id_pic ? (
+                      {selectedRequest.visitor?.id_pic ? (
                         <img
-                          src={`${media_URL}/storage/${selectedRequest.id_pic}`}
+                          src={`${media_URL}/storage/${selectedRequest.visitor?.id_pic}`}
                           alt="ID Document"
                           className="w-full h-32 sm:h-48 object-cover rounded-lg border cursor-pointer hover:opacity-90 transition-opacity"
                           onClick={() => handleViewPhoto(`${media_URL}/storage/${selectedRequest.id_pic}`, 'ID Document')}
@@ -501,38 +508,31 @@ export default function HostDashboard() {
                 <h4 className="font-semibold text-gray-900 mb-3">Host Information</h4>
                 <div className="space-y-2">
                   <p className="text-sm text-gray-600">
-                    <span className="font-medium">Name:</span> {selectedRequest.h_name}
+                    <span className="font-medium">Name:</span> {selectedRequest.host?.name}
                   </p>
                   <p className="text-sm text-gray-600">
-                    <span className="font-medium">Email:</span> {selectedRequest.h_email}
+                    <span className="font-medium">Email:</span> {selectedRequest.host?.email}
+                  </p>
+                   <p className="text-sm text-gray-600">
+                    <span className="font-medium">Phone:</span> {selectedRequest.host?.phone}
                   </p>
                   <p className="text-sm text-gray-600">
-                    <span className="font-medium">Phone:</span> {selectedRequest.h_phone}
+                    <span className="font-medium">Department:</span> {selectedRequest.host?.department}
                   </p>
+                 
                 </div>
               </div>
-
-              {/* Visit Details */}
+              
+              {/* ID Details */}
               <div className="bg-gray-50 rounded-lg p-4">
-                <h4 className="font-semibold text-gray-900 mb-3">Visit Details</h4>
+                <h4 className="font-semibold text-gray-900 mb-3">ID Details</h4>
                 <div className="space-y-2">
                   <p className="text-sm text-gray-600">
-                    <span className="font-medium">Purpose:</span> {selectedRequest.purpose}
+                    <span className="font-medium">ID Type:</span> {selectedRequest.visitor?.id_type}
                   </p>
                   <p className="text-sm text-gray-600">
-                    <span className="font-medium">Visit Date:</span> {new Date(selectedRequest.visit_date).toLocaleDateString()}
+                    <span className="font-medium">ID Number:</span> {selectedRequest.visitor?.id_number}
                   </p>
-                  <p className="text-sm text-gray-600">
-                    <span className="font-medium">ID Type:</span> {selectedRequest.id_type}
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    <span className="font-medium">ID Number:</span> {selectedRequest.id_number}
-                  </p>
-                  {selectedRequest.notes && (
-                    <p className="text-sm text-gray-600">
-                      <span className="font-medium">Notes:</span> {selectedRequest.notes}
-                    </p>
-                  )}
                 </div>
               </div>
             </div>

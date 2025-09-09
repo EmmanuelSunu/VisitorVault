@@ -5,9 +5,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class Company extends Model
+class Host extends Model
 {
     use HasFactory, SoftDeletes;
 
@@ -17,12 +17,14 @@ class Company extends Model
      * @var array<int, string>
      */
     protected $fillable = [
+        'company_id',
         'name',
-        'address',
-        'contact_person',
-        'contact_email',
-        'contact_phone',
+        'email',
+        'phone',
+        'department',
+        'position',
         'notes',
+        'is_active',
     ];
 
     /**
@@ -31,24 +33,17 @@ class Company extends Model
      * @var array<string, string>
      */
     protected $casts = [
+        'is_active' => 'boolean',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'deleted_at' => 'datetime',
     ];
 
     /**
-     * Get the visitors associated with the company.
+     * Get the company that the host belongs to.
      */
-    public function visitors()
+    public function company(): BelongsTo
     {
-        return $this->hasMany(Visitor::class);
-    }
-
-    /**
-     * Get the hosts associated with the company.
-     */
-    public function hosts(): HasMany
-    {
-        return $this->hasMany(Host::class);
+        return $this->belongsTo(Company::class);
     }
 }
