@@ -335,7 +335,7 @@ export default function HostDashboard() {
                                 {new Date(request.visit_date).toLocaleDateString()}
                               </div>
                               <p className="text-sm text-gray-600 line-clamp-2">
-                                <strong>Purpose:</strong> {request.visitor?.purpose}
+                                <strong>Purpose:</strong> {request.purpose}
                               </p>
                             </div>
 
@@ -402,7 +402,7 @@ export default function HostDashboard() {
                               {request.check_in_time ? new Date(request.check_in_time).toLocaleTimeString([], {
                                 hour: '2-digit',
                                 minute: '2-digit'
-                              }) : 'Not checked in'} - {request.visitor?.purpose ? request.visitor.purpose.substring(0, 30) + '...' : 'No purpose'}
+                              }) : 'Not checked in'} - {request.purpose ? request.purpose.substring(0, 30) + '...' : 'No purpose'}
                             </p>
                             <Badge
                               className={`mt-1 ${request.status === 'approved' ? 'status-approved' :
@@ -458,6 +458,9 @@ export default function HostDashboard() {
                     </p>
                     <p className="text-sm text-gray-500">
                       <span className="font-medium">Phone:</span> {selectedRequest.visitor?.phone}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      <span className="font-medium">Purpose:</span> {selectedRequest.purpose}
                     </p>
                   </div>
                 </div>
