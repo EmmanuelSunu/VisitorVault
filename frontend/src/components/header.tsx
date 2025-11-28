@@ -79,7 +79,7 @@ export default function Header() {
                 </DropdownMenu>
               </>
             ) : (
-              <Button className="hidden md:block" onClick={() => window.location.href = "/api/login"}>
+              <Button className="hidden md:block" onClick={() => window.location.href = "/login"}>
                 Sign In
               </Button>
             )}

@@ -450,7 +450,7 @@ export default function VisitorRegistration() {
               <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Desiderata Visitor Management System</h1>
               <p className="text-sm sm:text-base text-gray-600">Welcome! Please complete your registration below.</p>
             </div>
-            {user ? (
+            {/* {user ? (
               <Button variant="ghost" onClick={handleStaffLogin} className="text-sm w-full sm:w-auto">
                 <Settings className="h-4 w-4 mr-2" />
                 Dashboard
@@ -460,7 +460,7 @@ export default function VisitorRegistration() {
                 <User className="h-4 w-4 mr-2 " />
                 Login
               </Button>
-            )}
+            )} */}
           </div>
         </div>
       </header>

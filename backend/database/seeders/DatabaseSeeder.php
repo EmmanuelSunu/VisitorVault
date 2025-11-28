@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\User;
+use App\Models\Company;
 use App\Models\Visitor;
 use Illuminate\Database\Seeder;
 
@@ -25,6 +26,24 @@ class DatabaseSeeder extends Seeder
             'name' => 'Reception Staff',
             'email' => 'reception@example.com',
             'role' => 'receptionist'
+        ]);
+
+        Company::create([
+            'name' => 'BethLog Company Ltd.',
+            'address' => 'HQ Tse Addo, Accra, Ghana',
+            'contact_person' => 'CEO',
+            'contact_email' => 'info@bethlog.com',
+            'contact_phone' => '+233 123465832',
+            'notes' => 'Company 1 notes'
+        ]);
+
+        Company::create([
+            'name' => 'Bethlog Construction',
+            'address' => 'BethLog Tower',
+            'contact_person' => 'Nii',
+            'contact_email' => 'nii@bethlogconstruction.com',
+            'contact_phone' => '+233 123465832',
+            'notes' => 'Company 1 notes'
         ]);
 
         // // Create some host users

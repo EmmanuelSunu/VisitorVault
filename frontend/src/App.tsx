@@ -22,9 +22,11 @@ function Router() {
       <Route path="/register" component={VisitorRegistration} />
       <Route path="/staff" component={isAuthenticated ? Home : Landing} />
       <Route path="/host" component={HostDashboard} />
+      <Route path="/dashboard" component={HostDashboard} />
       <Route path="/reception" component={ReceptionInterface} />
       <Route path="/admin" component={AdminPanel} />
       <Route path="/staff-login" component={StaffLogin} />
+      <Route path="/login" component={StaffLogin} />
       <Route component={NotFound} />
     </Switch>
   );
