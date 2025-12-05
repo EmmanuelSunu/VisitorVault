@@ -1,4 +1,4 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -20,11 +20,21 @@ function Router() {
     <Switch>
       <Route path="/" component={VisitorRegistration} />
       <Route path="/register" component={VisitorRegistration} />
-      <Route path="/staff" component={isAuthenticated ? Home : Landing} />
-      <Route path="/host" component={HostDashboard} />
-      <Route path="/dashboard" component={HostDashboard} />
-      <Route path="/reception" component={ReceptionInterface} />
-      <Route path="/admin" component={AdminPanel} />
+      <Route path="/staff">
+        {() => (isAuthenticated ? <Home /> : <Redirect to="/staff-login" />)}
+      </Route>
+      <Route path="/host">
+        {() => (isAuthenticated ? <HostDashboard /> : <Redirect to="/staff-login" />)}
+      </Route>
+      <Route path="/dashboard">
+        {() => (isAuthenticated ? <HostDashboard /> : <Redirect to="/staff-login" />)}
+      </Route>
+      <Route path="/reception">
+        {() => (isAuthenticated ? <ReceptionInterface /> : <Redirect to="/staff-login" />)}
+      </Route>
+      <Route path="/admin">
+        {() => (isAuthenticated ? <AdminPanel /> : <Redirect to="/staff-login" />)}
+      </Route>
       <Route path="/staff-login" component={StaffLogin} />
       <Route path="/login" component={StaffLogin} />
       <Route component={NotFound} />
